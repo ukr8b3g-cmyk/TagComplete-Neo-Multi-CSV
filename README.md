@@ -5,6 +5,13 @@
 
 **[English](#english)**
 
+## 複数のタグCSVを同時に読み込み・検索
+
+**Load and search multiple tag CSV files at the same time**
+
+Danbooru 2025、e621、自然言語、Anima、ユーザーCSVを、
+モデルや用途に合わせて組み合わせられます。
+
 **Forge Neo向け、複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
 
 A Forge Neo fork of TagComplete Neo with multiple CSV sources,
@@ -178,6 +185,14 @@ CSVはサブフォルダにも配置できます。設定画面には相対パ�
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo)
 から収録しています。複数CSVを選択できるため、事前に統合された
 `danbooru_e621_merged.csv`は同梱しません。
+
+> [!IMPORTANT]
+> **`danbooru_2025.csv`と`e621.csv`の同時選択は対応済みです。**
+> ただし、この2ファイルと`danbooru_e621_merged.csv`のようなマージ済みCSVを
+> 同時に選択することは推奨しません。同一タグは1候補へ統合されるため検索が
+> 壊れるわけではありませんが、重複データによってインデックス構築時間と
+> メモリ使用量が増え、カテゴリ・件数・ソース優先順位も分かりにくくなります。
+> **個別CSVの組み合わせか、マージ済みCSVのどちらか一方を使用してください。**
 
 ### タグCSV
 
@@ -665,6 +680,15 @@ The two upstream tag lists are taken from
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo).
 The pre-merged Danbooru/e621 list is intentionally not bundled because this
 fork can select and merge multiple sources at runtime.
+
+> [!IMPORTANT]
+> **Selecting `danbooru_2025.csv` and `e621.csv` together is supported.**
+> However, do not also select a pre-merged file such as
+> `danbooru_e621_merged.csv`. Exact duplicates are consolidated, so this does
+> not normally break search, but the redundant data increases index build time
+> and memory usage and makes category, count, and source-priority resolution
+> harder to understand. **Use either the separate source files or a pre-merged
+> file, not both.**
 
 ```text
 tags/
