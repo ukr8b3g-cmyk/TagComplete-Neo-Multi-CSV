@@ -25,6 +25,7 @@
 
         function serverSelected() {
             return !remoteDisabledForSession
+                && !TAC_CFG?.translation?.liveTranslation
                 && String(opts?.["tacjp_searchEngine"] || "Server index") !== "Legacy browser";
         }
 
@@ -55,6 +56,28 @@
             await loadExtraTags(config);
         };
 
+        let previousServerMode = serverSelected();
+        if (typeof QUEUE_AFTER_CONFIG_CHANGE !== "undefined") {
+            QUEUE_AFTER_CONFIG_CHANGE.push(async () => {
+                const nextServerMode = serverSelected();
+                if (nextServerMode === previousServerMode) return;
+                previousServerMode = nextServerMode;
+                allTags = [];
+                tagIndex?.clear?.();
+                translations.clear();
+                tagsLoaded = false;
+                if (nextServerMode) {
+                    await loadTags(TAC_CFG);
+                } else {
+                    await legacyLoadTags(TAC_CFG);
+                    if (TAC_CFG?.useIndexedSearch && allTags.length > 0) {
+                        await buildTagIndex();
+                    }
+                }
+                tagsLoaded = true;
+            });
+        }
+
         class ServerTagParser extends BaseTagParser {
             constructor() {
                 super(() => {
@@ -68,6 +91,7 @@
                 if (activeController) activeController.abort();
                 activeController = new AbortController();
 
+                if (typeof updateTacStatusDot === "function") updateTacStatusDot("loading");
                 const body = TACJPFastSearchCore.makeRequest(
                     TAC_CFG,
                     tagword,
@@ -75,7 +99,10 @@
                     textArea?.selectionStart ?? String(prompt || "").length,
                     {resultPool: opts?.["tacjp_serverResultPool"] || 250},
                 );
-                if (!body.query || body.tag_files.length === 0) return [];
+                if (!body.query || body.tag_files.length === 0) {
+                    if (typeof updateTacStatusDot === "function") updateTacStatusDot("ready");
+                    return [];
+                }
 
                 try {
                     const response = await fetch("tacjp/v1/search", {
@@ -115,12 +142,14 @@
                         if (result.translation) translations.set(text, result.translation);
                         output.push(result);
                     }
+                    if (typeof updateTacStatusDot === "function") updateTacStatusDot("ready");
                     if (opts?.["tacjp_searchDebug"]) {
                         console.debug("[TagComplete Neo Multi-CSV] server search", data);
                     }
                     return output;
                 } catch (error) {
                     if (error?.name === "AbortError" || sequence !== requestSequence) return [];
+                    if (typeof updateTacStatusDot === "function") updateTacStatusDot("error");
                     await switchToLegacy(error);
                     return [];
                 }
