@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -34,15 +35,15 @@ except ImportError:  # Forge variants without orjson remain supported.
 
 
 class FastSearchBody(BaseModel):
-    query: str = ""
-    tag_files: list[str] = Field(default_factory=list)
-    translation_files: list[str] = Field(default_factory=list)
+    query: str = Field(default="", max_length=512)
+    tag_files: list[str] = Field(default_factory=list, max_items=64)
+    translation_files: list[str] = Field(default_factory=list, max_items=64)
     prompt_mode: str = "Tag"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True
     substring_only: bool = False
-    limit: int = 250
+    limit: int = Field(default=250, ge=1, le=2000)
     include_sources: bool = False
 
 
@@ -60,7 +61,8 @@ def clear_fast_search_cache(*_args, **_kwargs):
     result = FAST_SEARCH.clear(disk=True)
     print(
         "[TagComplete Neo Multi-CSV] Cleared fast-search cache: "
-        f"{result['memory_entries']} memory entries, {result['disk_files']} files"
+        f"{result['memory_entries']} memory entries, "
+        f"{result['disk_files']} files"
     )
     return result
 
@@ -79,7 +81,8 @@ def on_ui_settings():
                 ]
             },
         ).info(
-            "Server index keeps compiled CSV data on the server and transfers only matching candidates."
+            "Server index keeps compiled CSV data on the server and transfers "
+            "only matching candidates."
         ),
         "tacjp_serverResultPool": shared.OptionInfo(
             250,
@@ -87,12 +90,16 @@ def on_ui_settings():
             gr.Slider,
             lambda: {"minimum": 20, "maximum": 1000, "step": 10},
         ).info(
-            "Candidates returned before local frequency sorting. 200–300 is recommended."
+            "Candidates returned before local frequency sorting. "
+            "200–300 is recommended."
         ),
         "tacjp_persistentSearchCache": shared.OptionInfo(
             True,
             "Persist compiled Multi-CSV search indexes",
-        ).info("Reuses indexes after WebUI restart and rebuilds only when a selected CSV changes."),
+        ).info(
+            "Reuses indexes after WebUI restart and rebuilds only when a "
+            "selected CSV changes."
+        ),
         "tacjp_searchMemoryEntries": shared.OptionInfo(
             4,
             "Compiled search configurations kept in memory",
@@ -147,22 +154,31 @@ def api_fast_search(_: gr.Blocks, app: FastAPI):
                 memory_entries=int(
                     getattr(shared.opts, "tacjp_searchMemoryEntries", 4) or 4
                 ),
-                disk_entries=int(getattr(shared.opts, "tacjp_searchDiskEntries", 8) or 8),
+                disk_entries=int(
+                    getattr(shared.opts, "tacjp_searchDiskEntries", 8) or 8
+                ),
             )
-            result = await __import__("asyncio").to_thread(FAST_SEARCH.search, request)
+            result = await asyncio.to_thread(FAST_SEARCH.search, request)
             if getattr(shared.opts, "tacjp_searchDebug", False):
                 print(
                     "[TagComplete Neo Multi-CSV] search "
                     f"cache={result.get('cache')} total={result.get('total')} "
-                    f"count={result.get('count')} build={result.get('build_ms')}ms "
+                    f"count={result.get('count')} "
+                    f"build={result.get('build_ms')}ms "
                     f"request={result.get('search_ms')}ms"
                 )
             return _json_response(result)
         except (ValueError, FileNotFoundError) as exc:
-            return _json_response({"results": [], "count": 0, "error": str(exc)}, 400)
+            return _json_response(
+                {"results": [], "count": 0, "error": str(exc)},
+                400,
+            )
         except Exception as exc:
             print(f"[TagComplete Neo Multi-CSV] Fast search failed: {exc}")
-            return _json_response({"results": [], "count": 0, "error": str(exc)}, 500)
+            return _json_response(
+                {"results": [], "count": 0, "error": str(exc)},
+                500,
+            )
 
     @app.post("/tacjp/v1/search-cache/clear")
     async def tacjp_clear_fast_search_cache():
@@ -172,10 +188,11 @@ def api_fast_search(_: gr.Blocks, app: FastAPI):
     async def tacjp_fast_search_status():
         return _json_response(
             {
-                "version": 4,
+                "version": 5,
                 "memory_entries": len(FAST_SEARCH._memory),
                 "file_entries": len(FAST_SEARCH._file_memory),
                 "build_count": FAST_SEARCH.build_count,
+                "disk_cache_available": FAST_SEARCH._disk_cache_available,
             }
         )
 
