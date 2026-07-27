@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added a persistent server-side search engine for large Multi-CSV configurations.
+- Replaced the full merged JSON transfer with small per-query candidate responses.
+- Added per-file parsed caches and compiled combination caches that survive WebUI restarts.
+- Added automatic cache invalidation when a selected CSV size or modification time changes.
+- Added single-flight index construction so concurrent first queries share one build.
+- Added compact ASCII prefix indexes and Unicode 1–3 gram indexes for translated search.
+- Added settings for search engine selection, result pool size, memory/disk cache limits, timing logs, and cache clearing.
+- Added automatic fallback to the legacy browser index if server search is unavailable.
+- Kept the legacy browser index for compatibility and for experimental full-prompt live translation.
+
 ## 1.0.0
 
 - Forked TagComplete Neo while preserving its autocomplete providers and UI.
