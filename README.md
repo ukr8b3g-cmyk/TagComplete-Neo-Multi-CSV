@@ -87,8 +87,20 @@ DominikDoom/a1111-sd-webui-tagcomplete
 
 ### インストール
 
-1. ZIPを展開します。
-2. フォルダ名が次の形になるように配置します。
+#### Git clone
+
+Forge Neoの`extensions`フォルダーで実行します。
+
+```powershell
+cd "＜Forge-Neoのインストール先＞\extensions"
+git clone https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV.git
+```
+
+#### ZIP
+
+1. GitHubの`Code` → `Download ZIP`からZIPを取得して展開します。
+2. 展開後のフォルダーをForge Neoの`extensions`へ配置し、
+   フォルダー名を`TagComplete-Neo-Multi-CSV`にします。
 
 ```text
 Forge-Neo/
@@ -100,10 +112,15 @@ Forge-Neo/
       └─ README.md
 ```
 
-3. WebUIを起動または再起動します。
-   Generate欄付近の状態ランプがオレンジから緑へ変わってから操作してください。
-4. `Settings` → `Tag Autocomplete / Multi-CSV`を開きます。
-5. 設定変更後は`Apply settings`を押します。`requires Reload UI`と表示される項目だけUI再読み込みが必要です。
+既に同名フォルダーがある場合は、上書きせず既存内容を確認してください。
+
+#### 起動後
+
+1. Forge Neoを起動または再起動します。
+2. Generate欄付近の状態ランプがオレンジから緑へ変わるまで待ちます。
+3. `Settings` → `Tag Autocomplete / Multi-CSV`を開きます。
+4. 設定変更後は`Apply settings`を押します。
+   `requires Reload UI`と表示される項目だけUI再読み込みが必要です。
 
 既存のTagComplete系拡張と同時に有効化すると、同じ入力欄へ複数の補完処理が登録される場合があります。
 動作確認時は、他のTagComplete系拡張を一時的に無効化してください。
@@ -568,18 +585,41 @@ Key additions:
 
 ### Installation
 
-Extract the folder into the WebUI `extensions` directory:
+#### Git clone
 
-```text
-extensions/TagComplete-Neo-Multi-CSV/
+Run the following command from the Forge Neo `extensions` directory:
+
+```powershell
+cd "<path-to-Forge-Neo>\extensions"
+git clone https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV.git
 ```
 
-Restart Forge Neo and wait until the status indicator near Generate changes
-from orange to green, then open:
+#### ZIP
+
+1. Select `Code` → `Download ZIP` on GitHub and extract the archive.
+2. Move the extracted folder into the Forge Neo `extensions` directory and
+   name it `TagComplete-Neo-Multi-CSV`.
+
+```text
+Forge-Neo/
+└─ extensions/
+   └─ TagComplete-Neo-Multi-CSV/
+```
+
+Do not overwrite an existing folder without reviewing its contents first.
+
+#### After installation
+
+1. Start or restart Forge Neo.
+2. Wait until the status indicator near Generate changes from orange to green.
+3. Open:
 
 ```text
 Settings -> Tag Autocomplete / Multi-CSV
 ```
+
+4. After changing settings, select `Apply settings`. Reload the UI only for
+   options explicitly marked `requires Reload UI`.
 
 Disable other TagComplete forks while testing to avoid duplicate listeners.
 
