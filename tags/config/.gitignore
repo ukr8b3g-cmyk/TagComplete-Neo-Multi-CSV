@@ -1,0 +1,3 @@
+# User presets and remote-update metadata are local runtime data.
+*.json
+!.gitkeep

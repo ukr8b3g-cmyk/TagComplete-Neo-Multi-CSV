@@ -1,0 +1,19 @@
+# Runtime data
+tags/temp/
+tags/cache/
+tags/tag_frequency.db
+tags/config/*.json
+tags/tag_files/*.download
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local AI/editor context
+.github/copilot-instructions.md
+AGENTS.md
+AGENTS.local.md
+docs/
+.specstory/
+.vscode/

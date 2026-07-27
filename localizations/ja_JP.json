@@ -1,0 +1,22 @@
+{
+  "Tag files (multiple selection)": "タグファイル（複数選択）",
+  "Translation files (multiple selection)": "翻訳ファイル（複数選択）",
+  "Files under tags/tag_files. Selection order is source priority.": "tags/tag_files内のファイル。選択順が参照優先度になります。",
+  "Optional files under tags/translation_files. Leave empty when translations are not needed.": "tags/translation_files内の任意ファイル。翻訳が不要なら空にしてください。",
+  "Prompt mode": "プロンプトモード",
+  "Tag priority": "タグ優先",
+  "Auto (Hybrid)": "自動（ハイブリッド）",
+  "Natural language priority": "自然言語優先",
+  "Equal priority": "同等優先",
+  "Display translations in suggestions": "候補に翻訳を表示",
+  "Show source labels (TAG / NL / CUSTOM)": "候補の種類を表示（TAG / NL / CUSTOM）",
+  "Mark natural-language suggestions": "自然言語候補をオレンジで表示",
+  "Show user preset controls near prompts": "プロンプト付近にユーザープリセット操作を表示",
+  "Active user preset": "使用中のユーザープリセット",
+  "Underscore replacement exclusion patterns": "アンダースコア置換の除外パターン",
+  "Comma/newline separated. Supports * and ?. Wildcard syntax such as __folder/name__ is always preserved.": "カンマまたは改行区切り。* と ? に対応。__folder/name__ 形式のワイルドカード構文は常に保持します。",
+  "Add '@' to artist tags": "アーティストタグに「@」を付加",
+  "Off — never add '@'": "オフ — 付加しない",
+  "On — always add '@'": "オン — 常に付加",
+  "Auto — only for detected ANIMA models": "自動 — ANIMAモデル検出時のみ付加"
+}
