@@ -30,7 +30,7 @@ assert.strictEqual(request.substring_only, true);
 assert.strictEqual(request.limit, 300);
 assert.deepStrictEqual(
     request.tag_files,
-    ["danbooru.csv", "natural.csv", "extra-quality-tags.csv"],
+    ["danbooru.csv", "natural.csv"],
 );
 assert.deepStrictEqual(request.translation_files, ["ja.csv"]);
 
