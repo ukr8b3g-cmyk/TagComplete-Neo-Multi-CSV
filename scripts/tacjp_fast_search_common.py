@@ -1,7 +1,7 @@
 """Fast persistent server-side search for TagComplete Neo Multi-CSV.
 
 The legacy Multi-CSV path serialises the complete merged dataset to the browser and
-builds a JavaScript index on first input. This module keeps the merged index on the
+builds a JavaScript index on first input.  This module keeps the merged index on the
 server, persists compiled caches across WebUI restarts, and returns only the best
 candidate pool for the current query.
 
@@ -34,8 +34,9 @@ except (ImportError, ModuleNotFoundError):
         DEFAULT_UNDERSCORE_EXCLUSIONS,
     )
 
-CACHE_VERSION = 4
+CACHE_VERSION = 5
 FILE_CACHE_VERSION = 2
+PREFIX_MAX_LENGTH = 3
 DEFAULT_RESULT_LIMIT = 250
 MAX_RESULT_LIMIT = 2000
 
@@ -174,7 +175,11 @@ def _iter_rows(path: Path):
         if first_row is None:
             return
         candidate_header = [_normalise_header(value) for value in first_row]
-        header = candidate_header if candidate_header and candidate_header[0] in _TAG_KEYS else None
+        header = (
+            candidate_header
+            if candidate_header and candidate_header[0] in _TAG_KEYS
+            else None
+        )
         if header is None:
             yield None, first_row
         for row in reader:
@@ -183,7 +188,10 @@ def _iter_rows(path: Path):
 
 
 def _as_mapping(header: Sequence[str], row: Sequence[str]) -> dict[str, str]:
-    return {header[index]: row[index] if index < len(row) else "" for index in range(len(header))}
+    return {
+        header[index]: row[index] if index < len(row) else ""
+        for index in range(len(header))
+    }
 
 
 def _safe_path(directory: Path, name: str) -> Path:
