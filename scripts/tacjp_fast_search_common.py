@@ -8,11 +8,11 @@ candidate pool for the current query.
 The module intentionally has no Forge imports so it can be unit-tested directly.
 """
 
-from __future__ import annotations
-
+import bisect
 import csv
 import re
 import unicodedata
+from array import array
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -34,11 +34,12 @@ except (ImportError, ModuleNotFoundError):
         DEFAULT_UNDERSCORE_EXCLUSIONS,
     )
 
-CACHE_VERSION = 5
+CACHE_VERSION = 6
 FILE_CACHE_VERSION = 2
 PREFIX_MAX_LENGTH = 3
 DEFAULT_RESULT_LIMIT = 250
 MAX_RESULT_LIMIT = 2000
+UINT32_MAX = (1 << 32) - 1
 
 _TAG_KEYS = ("tag", "name", "english", "token", "value")
 _CATEGORY_KEYS = ("category", "cat", "type_id")
@@ -85,6 +86,74 @@ _CANONICAL_PROTECTED_EXACT = frozenset(
     for value in DEFAULT_UNDERSCORE_EXCLUSIONS
     if "*" not in str(value) and "?" not in str(value)
 )
+
+
+def build_compact_index(
+    values_by_key: Mapping[str, Sequence[int]],
+) -> dict[str, Any]:
+    keys = tuple(sorted(values_by_key))
+    offsets = array("I", [0])
+    values = array("I")
+    for key in keys:
+        group = values_by_key[key]
+        if len(values) + len(group) > UINT32_MAX:
+            raise OverflowError("Compact index exceeds uint32 offset capacity")
+        for value in group:
+            row_id = int(value)
+            if row_id < 0 or row_id > UINT32_MAX:
+                raise OverflowError("Compact index row ID exceeds uint32 capacity")
+            values.append(row_id)
+        offsets.append(len(values))
+    return {
+        "keys": keys,
+        "offsets": offsets,
+        "values": values,
+    }
+
+
+def compact_index_get(
+    index: Mapping[str, Any],
+    key: str,
+) -> Sequence[int] | None:
+    keys = index["keys"]
+    position = bisect.bisect_left(keys, key)
+    if position >= len(keys) or keys[position] != key:
+        return None
+    offsets = index["offsets"]
+    values = index["values"]
+    return memoryview(values)[
+        offsets[position] : offsets[position + 1]
+    ]
+
+
+def is_compact_index(index: object) -> bool:
+    if not isinstance(index, Mapping):
+        return False
+    keys = index.get("keys")
+    offsets = index.get("offsets")
+    values = index.get("values")
+    if (
+        not isinstance(keys, tuple)
+        or not isinstance(offsets, array)
+        or offsets.typecode != "I"
+        or not isinstance(values, array)
+        or values.typecode != "I"
+        or len(offsets) != len(keys) + 1
+        or not offsets
+        or offsets[0] != 0
+        or offsets[-1] != len(values)
+    ):
+        return False
+    return (
+        all(
+            keys[index - 1] < keys[index]
+            for index in range(1, len(keys))
+        )
+        and all(
+            offsets[index - 1] <= offsets[index]
+            for index in range(1, len(offsets))
+        )
+    )
 
 
 def _canonical_underscore_protected(text: str) -> bool:
@@ -224,7 +293,7 @@ def _decode_code(values: tuple[str, ...], code: int, fallback: str) -> str:
     return values[code] if 0 <= code < len(values) else fallback
 
 
-@dataclass(slots=True)
+@dataclass
 class SearchRequest:
     query: str
     tag_files: Sequence[str]

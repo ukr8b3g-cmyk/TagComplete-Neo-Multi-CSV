@@ -2,6 +2,43 @@
 
 ## 日本語
 
+### 実機検証記録
+
+2026年7月、Forge Neo上で
+`danbooru_2025.csv`、`natural_language_tags.csv`、翻訳CSV 2個を選択し、
+`school`、`bag`、Backspace復帰を使って計測しました。数値は当該環境での
+実測値であり、PC、ブラウザ、同時使用拡張によって変動します。
+
+| 項目 | 変更前 | v6連続配列キャッシュ | 結果 |
+|---|---:|---:|---|
+| ディスクキャッシュ復元 | 873.55 ms | 380.54 ms | 56.4%短縮 |
+| 再起動後の初回UI表示 | 1.052 s | 609 ms | 合格 |
+| メモリキャッシュAPI | — | 9.03 ms | 合格 |
+| メモリキャッシュ時UI | — | 176.4 ms | 実用範囲 |
+| 検索本体 | — | 約7～10 ms | ボトルネックではない |
+| キャッシュサイズ | 基準 | 約9.3%削減 | 合格 |
+
+検証内容:
+
+- 初回構築後、同一セッションで`cache=memory`になること
+- Forge Neo再起動後に`cache=disk`になること
+- 選択CSV変更時にキャッシュが自動無効化されること
+- 複数CSV・翻訳CSVの重複統合と候補順位が維持されること
+- 候補20・50・100件でDOM描画が主な遅延原因ではないこと
+- デバウンス25msはAbort増加に対して改善が小さいため不採用
+- デバウンス50msを維持し、Forge Neo全体のメインスレッド遅延と分離したこと
+
+初回インデックス構築は約10.24秒でしたが、CSV構成が変わらない限り
+ディスクキャッシュを再利用します。起動直後に全CSVを読み込むプリロードは
+追加せず、初回検索時の遅延だけを許容する設計としました。
+
+判定:
+
+- 複数CSV検索: 合格
+- ディスク／メモリキャッシュ: 合格
+- 入力応答: 実用上合格
+- 通常設定: 計測ログOFF、デバウンス50msを維持
+
 ### 推奨設定
 
 `Settings` → `Tag Autocomplete / Multi-CSV`で、次の設定を使用します。
@@ -56,6 +93,21 @@ LoRA、LyCORIS、Embedding、Wildcard、YAML Wildcard、UMI、Chantなどの既�
 - 初回構築時間と検索リクエスト時間
 
 ## English
+
+### Test record
+
+The Forge Neo test used `danbooru_2025.csv`, `natural_language_tags.csv`, and
+two translation CSV files. The v6 contiguous-array cache reduced measured disk
+restore time from 873.55 ms to 380.54 ms (56.4%) and the first post-restart UI
+result from 1.052 s to 609 ms. A memory-cached request measured 9.03 ms at the
+API and 176.4 ms end to end in the UI. These are reference measurements from
+one test system, not hardware-independent guarantees.
+
+Functional checks covered build, disk and memory cache paths, automatic cache
+invalidation, duplicate merging, result ordering, Backspace behavior, and
+20/50/100-result rendering comparisons. A 25 ms debounce experiment was
+rejected because it increased aborts without enough latency improvement; the
+50 ms behavior was retained.
 
 ### Recommended settings
 

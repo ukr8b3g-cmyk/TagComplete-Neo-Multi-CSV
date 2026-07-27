@@ -16,6 +16,7 @@ try:
         _CODE_TO_INSERT,
         _CODE_TO_SCHEME,
         _CODE_TO_SOURCE,
+        compact_index_get,
         _decode_code,
         normalize_search,
     )
@@ -28,6 +29,7 @@ except (ImportError, ModuleNotFoundError):
         _CODE_TO_INSERT,
         _CODE_TO_SCHEME,
         _CODE_TO_SOURCE,
+        compact_index_get,
         _decode_code,
         normalize_search,
     )
@@ -105,7 +107,10 @@ class FastSearchQueryMixin:
                 )
             ]
             gram_index = index.get("unicode_gram_index", {})
-            subsets = [gram_index.get(key) for key in gram_keys]
+            subsets = [
+                compact_index_get(gram_index, key)
+                for key in gram_keys
+            ]
             if any(subset is None for subset in subsets):
                 return (), True
             ordered = sorted(subsets, key=len)
@@ -134,7 +139,8 @@ class FastSearchQueryMixin:
         subsets = []
         for word in words:
             length = min(PREFIX_MAX_LENGTH, len(word))
-            subset = prefix_index.get(
+            subset = compact_index_get(
+                prefix_index,
                 f"{length}:{word[:length]}"
             )
             if subset is not None:
@@ -172,16 +178,21 @@ class FastSearchQueryMixin:
                 "results": [],
                 "count": 0,
                 "cache": "none",
+                "build_ms": 0.0,
+                "original_build_ms": 0.0,
+                "restore_ms": 0.0,
+                "search_only_ms": 0.0,
                 "search_ms": 0.0,
             }
 
-        index, cache_state = self._load_or_build(
+        index, cache_state, load_timings = self._load_or_build(
             tag_items,
             translation_items,
             persistent=bool(request.persistent_cache),
             memory_entries=request.memory_entries,
             disk_entries=request.disk_entries,
         )
+        search_only_started = time.perf_counter()
         rows = index["rows"]
         fields = index.get("fields")
         field_groups = index.get("field_groups")
@@ -319,12 +330,20 @@ class FastSearchQueryMixin:
             item.append(score)
             output.append(item)
 
+        search_only_ms = round(
+            (time.perf_counter() - search_only_started) * 1000,
+            2,
+        )
+        original_build_ms = index.get("build_ms", 0.0)
         return {
             "results": output,
             "count": len(output),
             "total": len(rows),
             "cache": cache_state,
-            "build_ms": index.get("build_ms", 0.0),
+            "build_ms": original_build_ms,
+            "original_build_ms": original_build_ms,
+            "restore_ms": load_timings.get("restore_ms", 0.0),
+            "search_only_ms": search_only_ms,
             "search_ms": round(
                 (time.perf_counter() - started) * 1000,
                 2,

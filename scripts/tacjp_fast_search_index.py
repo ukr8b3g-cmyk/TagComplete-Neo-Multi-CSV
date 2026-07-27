@@ -6,7 +6,6 @@ import os
 import re
 import threading
 import time
-from array import array
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -15,7 +14,9 @@ try:
         CACHE_VERSION,
         PREFIX_MAX_LENGTH,
         _MutableRecord,
+        build_compact_index,
         _insert_code,
+        is_compact_index,
         _scheme_code,
         _source_code,
         canonical_tag,
@@ -26,7 +27,9 @@ except (ImportError, ModuleNotFoundError):
         CACHE_VERSION,
         PREFIX_MAX_LENGTH,
         _MutableRecord,
+        build_compact_index,
         _insert_code,
+        is_compact_index,
         _scheme_code,
         _source_code,
         canonical_tag,
@@ -227,14 +230,10 @@ class FastSearchIndexMixin:
             for gram_key in unicode_keys:
                 unicode_gram_lists.setdefault(gram_key, []).append(index)
 
-        prefix_index = {
-            key: array("I", values)
-            for key, values in prefix_lists.items()
-        }
-        unicode_gram_index = {
-            key: array("I", values)
-            for key, values in unicode_gram_lists.items()
-        }
+        prefix_index = build_compact_index(prefix_lists)
+        unicode_gram_index = build_compact_index(
+            unicode_gram_lists,
+        )
         self.build_count += 1
         return {
             "version": CACHE_VERSION,
@@ -292,7 +291,7 @@ class FastSearchIndexMixin:
         persistent: bool,
         memory_entries: int,
         disk_entries: int,
-    ) -> tuple[dict[str, Any], str]:
+    ) -> tuple[dict[str, Any], str, dict[str, float]]:
         persistent = bool(
             persistent and self._disk_cache_available
         )
@@ -304,7 +303,7 @@ class FastSearchIndexMixin:
             cached = self._memory.get(signature)
             if cached is not None:
                 self._memory.move_to_end(signature)
-                return cached, "memory"
+                return cached, "memory", {"restore_ms": 0.0}
             event = self._building.get(signature)
             if event is None:
                 event = threading.Event()
@@ -323,7 +322,7 @@ class FastSearchIndexMixin:
                 cached = self._memory.get(signature)
                 if cached is not None:
                     self._memory.move_to_end(signature)
-                    return cached, "memory-wait"
+                    return cached, "memory-wait", {"restore_ms": 0.0}
             if error is not None:
                 raise RuntimeError(
                     f"Search index build failed: {error}"
@@ -340,12 +339,19 @@ class FastSearchIndexMixin:
         try:
             cache_path = self.index_cache_dir / f"{signature}.pkl"
             if persistent:
+                restore_started = time.perf_counter()
                 payload = self._read_pickle(cache_path)
                 if (
                     isinstance(payload, dict)
                     and payload.get("version") == CACHE_VERSION
                     and payload.get("signature") == signature
                     and payload.get("manifest") == manifest
+                    and is_compact_index(
+                        payload.get("prefix_index")
+                    )
+                    and is_compact_index(
+                        payload.get("unicode_gram_index")
+                    )
                 ):
                     self._remember_index(
                         signature,
@@ -354,11 +360,19 @@ class FastSearchIndexMixin:
                     )
                     with self._lock:
                         self._build_errors.pop(signature, None)
+                    restore_ms = round(
+                        (time.perf_counter() - restore_started) * 1000,
+                        2,
+                    )
                     try:
                         os.utime(cache_path, None)
                     except OSError:
                         pass
-                    return payload, "disk"
+                    return (
+                        payload,
+                        "disk",
+                        {"restore_ms": restore_ms},
+                    )
 
             index = self._compile(
                 signature,
@@ -380,7 +394,7 @@ class FastSearchIndexMixin:
             )
             with self._lock:
                 self._build_errors.pop(signature, None)
-            return index, "build"
+            return index, "build", {"restore_ms": 0.0}
         except BaseException as exc:
             with self._lock:
                 self._build_errors[signature] = exc

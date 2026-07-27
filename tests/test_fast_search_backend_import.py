@@ -97,6 +97,20 @@ class _FakeApp:
         return self._register("GET", path)
 
 
+def test_fast_search_common_supports_forge_style_loader() -> None:
+    """Forge executes script modules without first adding them to sys.modules."""
+
+    root = Path(__file__).resolve().parents[1]
+    path = root / "scripts" / "tacjp_fast_search_common.py"
+    name = "_test_tacjp_fast_search_common_unregistered"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    assert name not in sys.modules
+    spec.loader.exec_module(module)
+    assert module.SearchRequest(query="school", tag_files=[]).query == "school"
+
+
 def test_fast_search_backend_registers_settings_and_routes(
     tmp_path: Path,
     monkeypatch,

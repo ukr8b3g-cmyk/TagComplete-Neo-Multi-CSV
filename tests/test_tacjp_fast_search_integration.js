@@ -96,8 +96,92 @@ require("../javascript/zzzz_tacjp_fast_search.js");
     assert.strictEqual(legacyLoads, 0);
     const parser = PARSERS[0];
     assert.strictEqual(parser.triggerCondition(), true);
+    const timingLogs = [];
+    const originalInfo = console.info;
+    console.info = (...args) => timingLogs.push(args.join(" "));
+    opts.tacjp_searchDebug = true;
+    TACJPFastSearchTiming.input();
+    const registeredAt = performance.now();
+    TACJPFastSearchTiming.debounceScheduled({
+        wait: 50,
+        registeredAt,
+        dueAt: registeredAt + 50,
+    });
+    TACJPFastSearchTiming.debounceFired({firedAt: registeredAt + 55});
+    TACJPFastSearchTiming.mark("debounce_end");
+    TACJPFastSearchTiming.mark("search_start");
+    TACJPFastSearchTiming.mark("input_event_end");
+    TACJPFastSearchTiming.mark("main_thread_available");
+    TACJPFastSearchTiming.recordLongTask({
+        startTime: registeredAt + 49,
+        duration: 6,
+        name: "self",
+        attribution: [],
+    });
+    await new Promise(resolve => setTimeout(resolve, 60));
     const results = await parser.parse({selectionStart: 4}, "long");
+    TACJPFastSearchTiming.mark("sort_done");
+    TACJPFastSearchTiming.mark("dom_done");
+    TACJPFastSearchTiming.mark("raf_done");
+    TACJPFastSearchTiming.mark("paint_done");
+    TACJPFastSearchTiming.domMetrics({
+        dom_items: 100,
+        dom_clear_ms: 1,
+        dom_build_ms: 10,
+        dom_attribute_ms: 8,
+        dom_event_ms: 2,
+        dom_append_ms: 1,
+        dom_layout_ms: 3,
+        dom_per_item_ms: 0.1,
+    });
+    TACJPFastSearchTiming.finish();
+    opts.tacjp_searchDebug = false;
     assert.strictEqual(results.length, 3);
+    assert.strictEqual(timingLogs.length, 1);
+    for (const name of [
+        "input",
+        "debounce_end",
+        "fetch_start",
+        "response_received",
+        "json_done",
+        "results_built",
+        "sort_done",
+        "dom_done",
+        "raf_done",
+        "paint_done",
+    ]) {
+        assert.ok(timingLogs[0].includes(`"${name}":`));
+    }
+    for (const name of [
+        "debounce_configured_ms",
+        "timer_registered",
+        "timer_due",
+        "timer_fired",
+        "timer_lag_ms",
+        "search_start",
+    ]) {
+        assert.ok(timingLogs[0].includes(`"${name}":`));
+    }
+    assert.ok(timingLogs[0].includes('"debounce_configured_ms":50'));
+    assert.ok(timingLogs[0].includes('"timer_lag_ms":5'));
+    assert.ok(timingLogs[0].includes('"api_call_count":1'));
+    assert.ok(timingLogs[0].includes('"aborted_request_count":0'));
+    assert.ok(timingLogs[0].includes('"dom_items":100'));
+    assert.ok(timingLogs[0].includes('"dom_per_item_ms":0.1'));
+    assert.ok(timingLogs[0].includes('"input_event_end":'));
+    assert.ok(timingLogs[0].includes('"main_thread_available":'));
+    assert.ok(timingLogs[0].includes('"long_task_count":1'));
+    assert.ok(timingLogs[0].includes('"timer_overlap_long_task_count":1'));
+    opts.tacjp_searchDebug = true;
+    TACJPFastSearchTiming.input();
+    TACJPFastSearchTiming.begin(100, "old");
+    TACJPFastSearchTiming.input();
+    TACJPFastSearchTiming.begin(101, "new");
+    TACJPFastSearchTiming.finish(100);
+    TACJPFastSearchTiming.cancel(101);
+    opts.tacjp_searchDebug = false;
+    assert.strictEqual(timingLogs.length, 1);
+    console.info = originalInfo;
 
     const highCount = results.find(result => result.text === "long_hair");
     const lowCount = results.find(result => result.text === "long_low_count");

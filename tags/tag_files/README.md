@@ -14,8 +14,10 @@ Only `tag` is required. Headerless TagComplete-compatible rows such as
 Bundled files:
 
 - `danbooru_2025.csv` (selected by default)
+- `natural_language_tags.csv` (selected by default)
+- `e621.csv`
 - `anima_artists.csv`
 - `anima_characters.csv`
-- `natural_language_tags.csv`
 
-The optional Anima and natural-language files are not selected by default.
+The e621 and Anima files are bundled but not selected by default.
+`danbooru_2025.csv` and `e621.csv` are sourced from sd-webui-tagcomplete-neo.

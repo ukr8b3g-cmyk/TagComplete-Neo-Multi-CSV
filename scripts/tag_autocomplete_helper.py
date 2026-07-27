@@ -572,18 +572,24 @@ def update_json_files(*args, **kwargs):
 
 def _default_tag_selection():
     names = [item.name for item in JP_DATA.list_tag_files()]
-    if "danbooru_2025.csv" in names:
-        return ["danbooru_2025.csv"]
+    preferred = [
+        name for name in ("danbooru_2025.csv", "natural_language_tags.csv")
+        if name in names
+    ]
+    if preferred:
+        return preferred
     return names[:1]
 
 
 def _default_translation_selection():
     names = [item.name for item in JP_DATA.list_translation_files()]
     preferred = [
-        name for name in names
-        if "merged_translations" in name.lower() or "danbooru" in name.lower()
+        name for name in ("merged_translations_dedup.csv", "natural_language_ja.csv")
+        if name in names
     ]
-    return preferred[:1]
+    if preferred:
+        return preferred
+    return names[:1]
 
 
 def _migrate_legacy_danbooru_selection():
@@ -788,7 +794,12 @@ def on_ui_settings():
         "tacjp_showTranslations": shared.OptionInfo(True, "Display translations in suggestions"),
         "tacjp_showSourceLabels": shared.OptionInfo(False, "Show source labels (TAG / NL / CUSTOM)"),
         "tacjp_colorNaturalLanguage": shared.OptionInfo(True, "Mark natural-language suggestions"),
-        "tacjp_quickControls": shared.OptionInfo(False, "Show user preset controls near prompts").needs_restart(),
+        "tacjp_quickControls": shared.OptionInfo(
+            False,
+            "Show user preset controls near prompts",
+            gr.Checkbox,
+            lambda: {"visible": False},
+        ).needs_restart(),
         "tacjp_activePreset": shared.OptionInfo("", "Active user preset", gr.Textbox, lambda: {"visible": False}),
         # Hidden compatibility values from the discontinued remote-update UI.
         "tacjp_autoUpdate": shared.OptionInfo(False, "Legacy remote update", gr.Checkbox, lambda: {"visible": False}),
@@ -1143,7 +1154,11 @@ def api_tac(_: gr.Blocks, app: FastAPI):
 
     @app.delete("/tacjp/v1/presets/{name:path}")
     async def tacjp_delete_preset(name: str):
-        return JSONResponse({"deleted": JP_PRESETS.delete(name), "presets": JP_PRESETS.list()})
+        deleted = JP_PRESETS.delete(name)
+        if deleted and getattr(shared.opts, "tacjp_activePreset", "") == name:
+            shared.opts.data["tacjp_activePreset"] = ""
+            shared.opts.save(shared.config_filename)
+        return JSONResponse({"deleted": deleted, "presets": JP_PRESETS.list()})
 
     @app.post("/tacjp/v1/presets/restore-builtins")
     async def tacjp_restore_builtins():

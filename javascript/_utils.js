@@ -57,6 +57,8 @@ async function readFile(filePath, json = false, cache = false) {
 // Load CSV
 async function loadCSV(path) {
     let text = await readFile(path);
+    if (text == null)
+        return null;
     return parseCSV(text);
 }
 
@@ -149,12 +151,23 @@ async function refreshStyleNamesIfChanged() {
 }
 
 // Debounce function to prevent spamming the autocomplete function
-const debounce = (func, wait = 300) => {
+const debounce = (func, wait = 300, observer = null) => {
     let timeout;
     return function (...args) {
         if (timeout) clearTimeout(timeout);
         return new Promise((resolve) => {
-            timeout = setTimeout(() => resolve(func.apply(this, args)), wait);
+            const registeredAt = performance.now();
+            const dueAt = registeredAt + wait;
+            observer?.scheduled?.({wait, registeredAt, dueAt});
+            timeout = setTimeout(() => {
+                observer?.fired?.({
+                    wait,
+                    registeredAt,
+                    dueAt,
+                    firedAt: performance.now(),
+                });
+                resolve(func.apply(this, args));
+            }, wait);
         });
     };
 }

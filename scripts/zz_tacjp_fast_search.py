@@ -19,10 +19,12 @@ if str(_HERE) not in sys.path:
 try:
     from scripts.jp_assist_core import DataStore
     from scripts.shared_paths import TAGS_PATH
+    from scripts.tacjp_fast_search_common import CACHE_VERSION
     from scripts.tacjp_fast_search import FastSearchStore, SearchRequest
 except (ImportError, ModuleNotFoundError):
     from jp_assist_core import DataStore  # type: ignore
     from shared_paths import TAGS_PATH  # type: ignore
+    from tacjp_fast_search_common import CACHE_VERSION  # type: ignore
     from tacjp_fast_search import FastSearchStore, SearchRequest  # type: ignore
 
 FAST_DATA = DataStore(TAGS_PATH)
@@ -165,6 +167,9 @@ def api_fast_search(_: gr.Blocks, app: FastAPI):
                     f"cache={result.get('cache')} total={result.get('total')} "
                     f"count={result.get('count')} "
                     f"build={result.get('build_ms')}ms "
+                    f"original_build={result.get('original_build_ms')}ms "
+                    f"restore={result.get('restore_ms')}ms "
+                    f"search_only={result.get('search_only_ms')}ms "
                     f"request={result.get('search_ms')}ms"
                 )
             return _json_response(result)
@@ -188,7 +193,7 @@ def api_fast_search(_: gr.Blocks, app: FastAPI):
     async def tacjp_fast_search_status():
         return _json_response(
             {
-                "version": 5,
+                "version": CACHE_VERSION,
                 "memory_entries": len(FAST_SEARCH._memory),
                 "file_entries": len(FAST_SEARCH._file_memory),
                 "build_count": FAST_SEARCH.build_count,

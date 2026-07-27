@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 from scripts.jp_assist_core import (
@@ -16,6 +18,20 @@ from scripts.jp_assist_core import (
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def test_jp_assist_core_supports_forge_style_loader() -> None:
+    """Forge executes script modules without first adding them to sys.modules."""
+
+    root = Path(__file__).resolve().parents[1]
+    path = root / "scripts" / "jp_assist_core.py"
+    name = "_test_jp_assist_core_unregistered"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    assert name not in sys.modules
+    spec.loader.exec_module(module)
+    assert module.TagRecord(tag="school").tag == "school"
 
 
 def test_merge_multiple_tag_and_translation_files(tmp_path: Path) -> None:
@@ -77,16 +93,15 @@ def test_underscore_protection_patterns() -> None:
     assert is_underscore_protected("abc_123", ["abc_*"])
 
 
-def test_presets_save_export_import_and_restore(tmp_path: Path) -> None:
+def test_user_presets_save_export_and_import(tmp_path: Path) -> None:
     store = DataStore(tmp_path / "tags")
     write(store.tag_dir / "danbooru.csv", "1girl,0,10,\n")
     write(store.tag_dir / "natural_language_tags.csv", "soft light,0,5,\n")
     presets = PresetStore(store)
 
     defaults = presets.list()
-    assert "Danbooru" in defaults["builtins"]
-    assert "Qwen-Image" in defaults["builtins"]
-    assert "Qwen-Image 2.0" in defaults["builtins"]
+    assert defaults["builtins"] == {}
+    assert defaults["users"] == {}
 
     saved = presets.save(
         "My Hybrid",
@@ -110,9 +125,9 @@ def test_presets_save_export_import_and_restore(tmp_path: Path) -> None:
     ]
 
     presets.save("Danbooru", {"tag_files": [], "prompt_mode": "Custom"}, builtin_override=True)
-    assert presets.list()["builtins"]["Danbooru"]["prompt_mode"] == "Custom"
+    assert presets.list()["users"]["Danbooru"]["prompt_mode"] == "Custom"
     presets.restore_builtins()
-    assert presets.list()["builtins"]["Danbooru"]["prompt_mode"] == "Tag"
+    assert presets.list()["users"]["Danbooru"]["prompt_mode"] == "Custom"
 
 
 def test_anima_artist_prefix_preset_validation(tmp_path: Path) -> None:

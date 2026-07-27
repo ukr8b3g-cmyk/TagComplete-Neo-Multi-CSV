@@ -2,11 +2,13 @@
 
 # TagComplete Neo Multi-CSV
 
-**Forge / Forge Neo向け、複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
+**[English](#english)**
 
-A Forge / Forge Neo fork of TagComplete Neo with multiple CSV sources,
+**Forge Neo向け、複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
+
+A Forge Neo fork of TagComplete Neo with multiple CSV sources,
 separate translation files, Japanese/translated search, natural-language
-vocabularies, presets, and safe prompt insertion.
+vocabularies, and safe prompt insertion.
 
 </div>
 
@@ -14,15 +16,33 @@ vocabularies, presets, and safe prompt insertion.
 > 候補ポップアップ、キーボード操作、カテゴリ色、LoRA・Embedding・Wildcard・Chantなど、
 > TagComplete Neoの操作感を維持しながら、Danbooru Tag JP Assistの辞書管理方式を統合しています。
 
+### プロジェクトの系譜
+
+```text
+DominikDoom/a1111-sd-webui-tagcomplete
+  └─ eduardoabreu81/sd-webui-tagcomplete-neo
+       └─ ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV
+```
+
+- **原点:** `a1111-sd-webui-tagcomplete` — TagCompleteの基本機能
+- **直接のフォーク元:** `sd-webui-tagcomplete-neo` — Forge Neo対応、互換性・性能改善
+- **このフォーク:** 複数タグCSV、分離翻訳CSV、自然言語辞書、
+  サーバー検索を追加
+
+元プロジェクトの機能と成果を尊重しつつ、本READMEはMulti-CSV版の実際の構成・
+設定・検証結果に合わせて独自に記述しています。
+
 ---
 
 ## 日本語
 
 ### 対応環境
 
-- Stable Diffusion WebUI Forge
 - Stable Diffusion WebUI Forge Neo
 - Gradio 3系・4系で異なる主要DOM構造を考慮
+
+現在、実機で動作確認している環境はForge Neoです。Forge／reForgeは未確認のため、
+対応環境には含めていません。
 
 主な用途:
 
@@ -30,8 +50,7 @@ vocabularies, presets, and safe prompt insertion.
 - Animaなどのタグ・自然言語ハイブリッドモデル
 - Krea 2、Z-Image、FLUX、Qwen-Imageなどの自然言語中心モデル
 
-モデルごとに辞書を強制固定しません。プリセットは推奨設定の呼び出しに使い、
-最終的なCSV・モード・挿入形式はユーザーが変更できます。
+モデルごとに辞書を強制固定しません。CSV・モード・挿入形式はユーザーが変更できます。
 
 ### 主な機能
 
@@ -61,12 +80,8 @@ vocabularies, presets, and safe prompt insertion.
 - 日本語・他言語翻訳による検索
 - 日本語・翻訳表示のON/OFF
 - `Tag` / `Hybrid` / `Natural Language` / `Custom`モード
-- 標準プリセットとユーザープリセット
-- プリセットの保存、上書き、複製、名前変更、削除
-- プリセットJSONのバックアップ・読み込み
-- プロンプト欄付近の折りたたみ式簡易設定
 - アンダースコア保護パターンのワイルドカード指定
-- 条件付きリモートCSV更新とオフライン継続利用
+- 大容量CSV向けサーバー検索と永続キャッシュ
 
 ### インストール
 
@@ -74,9 +89,9 @@ vocabularies, presets, and safe prompt insertion.
 2. フォルダ名が次の形になるように配置します。
 
 ```text
-stable-diffusion-webui-forge/
+Forge-Neo/
 └─ extensions/
-   └─ sd-webui-tagcomplete-neo-multicsv/
+   └─ TagComplete-Neo-Multi-CSV/
       ├─ javascript/
       ├─ scripts/
       ├─ tags/
@@ -84,6 +99,7 @@ stable-diffusion-webui-forge/
 ```
 
 3. WebUIを起動または再起動します。
+   Generate欄付近の状態ランプがオレンジから緑へ変わってから操作してください。
 4. `Settings` → `Tag Autocomplete / Multi-CSV`を開きます。
 5. 設定変更後は`Apply settings`を押します。`requires Reload UI`と表示される項目だけUI再読み込みが必要です。
 
@@ -92,21 +108,39 @@ stable-diffusion-webui-forge/
 
 ### データフォルダ
 
-この配布ZIPには容量の大きいタグCSV・翻訳CSVを同梱していません。利用前に、
-用意した`tag_files`と`translation_files`の内容を次のフォルダへコピーしてください。
-コピー後、設定欄横の更新ボタンまたはWebUI再起動で一覧を更新します。
+タグCSVと翻訳CSVは次のフォルダーへ同梱されます。ユーザーCSVも追加でき、
+設定欄横の更新ボタンまたはWebUI再起動で一覧を更新できます。
 
 ```text
 tags/
 ├─ tag_files/          # タグ・自然言語CSV
 ├─ translation_files/  # 翻訳・別名CSV
 ├─ chants/             # Chant JSON
-├─ config/             # ユーザープリセット、更新メタデータ
+├─ config/             # 内部設定、更新メタデータ
 ├─ cache/              # 実行時キャッシュ
 └─ temp/               # LoRA、Embedding、Wildcard等の一時一覧
 ```
 
 CSVはサブフォルダにも配置できます。設定画面には相対パスで表示されます。
+
+### 同梱データ
+
+元のTagComplete Neoと同様、用途を比較しやすい表形式で記載します。
+
+| ファイル | 出典・種別 | 主な用途 | 初期選択 |
+|---|---|---|---|
+| `danbooru_2025.csv` | TagComplete Neo / Danbooru 2025 | アニメ・SDXL・Illustrious系 | ✓ |
+| `natural_language_tags.csv` | Multi-CSV追加・自然言語辞書 | 自然言語・ハイブリッド入力 | ✓ |
+| `e621.csv` | TagComplete Neo / e621 | Furry・Anthro系 | — |
+| `anima_artists.csv` | Multi-CSV追加・Animaアーティスト | Animaのアーティスト補完 | — |
+| `anima_characters.csv` | Multi-CSV追加・Animaキャラクター | Animaのキャラクター補完 | — |
+| `merged_translations_dedup.csv` | 統合・重複除去済み翻訳 | Danbooru系タグの日本語検索・表示 | ✓ |
+| `natural_language_ja.csv` | 自然言語翻訳 | 自然言語候補の日本語検索・表示 | ✓ |
+
+`danbooru_2025.csv`と`e621.csv`は
+[sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo)
+から収録しています。複数CSVを選択できるため、事前に統合された
+`danbooru_e621_merged.csv`は同梱しません。
 
 ### タグCSV
 
@@ -179,6 +213,7 @@ long_hair,長髪
 Tag files:
 - danbooru_2025.csv
 - natural_language_tags.csv
+- e621.csv
 - my_custom_tags.csv
 
 Translation files:
@@ -221,34 +256,17 @@ Danbooruなどのタグ辞書を優先します。SDXL、Illustrious XL、Pony�
 
 モードは検索順位と挿入規則を調整します。CSV選択を強制的に固定するものではありません。
 
-### プリセット
+### 表示言語
 
-`Settings`内のMulti-CSVプリセットマネージャーでは次を実行できます。
+`表示言語`を`日本語`にすると、Multi-CSV追加項目だけでなくTagComplete Neo標準設定の
+項目名も日本語で表示します。`Auto`ではForge NeoのLocalization設定またはブラウザー言語に
+合わせます。設定値やJSON内のキーは翻訳せず、互換性を維持します。
 
-- 適用
-- 名前を付けて保存
-- 上書き
-- 名前変更
-- 削除
-- JSONバックアップ
-- JSON読み込み
+### プリセット（次バージョンで実装予定）
 
-プリセットはユーザーが保存したものだけを表示・バックアップします。
-バックアップJSONに含まれるのはプリセットと関連設定です。CSV本体は含みません。
-CSV本体は通常のファイルバックアップで保管してください。
-
-### プロンプト付近の簡易設定
-
-`Show collapsed preset controls near prompts`を有効にすると、txt2img / img2imgのプロンプト付近に
-折りたたみ式の操作欄を追加します。この機能の初期値はOFFで、TagComplete Neoの標準画面を変更しません。
-
-- プリセット
-- Prompt mode
-- タグCSV
-- 翻訳CSV
-- 適用ボタン
-
-有効化した場合も初期状態は閉じています。不要な場合は設定から無効化できます。
+プリセットの保存・ロード・削除・バックアップUIは、現行版では表示しません。
+Forge Neoをリロードせず、標準Settings欄まで安全に同期できる実装を確認してから
+次バージョンで追加する予定です。既存の`tags/config/presets.json`は削除しません。
 
 ### 検索
 
@@ -368,18 +386,30 @@ __wildcards/eye-color__
 
 Wildcard ManagerやDynamic Promptsの既存ファイル構成を変更しません。
 
-### リモートCSV更新
+### 詳細設定／トラブルシューティング
 
-任意のCSV URLとローカル保存名を設定できます。
+設定ページ最下部に、通常は変更しない項目を2つのアコーディオンへ分けています。
+どちらも初期状態は閉じています。通常利用では初期値のままにしてください。
 
-- 起動時確認をON/OFF
-- 設定画面から手動更新
-- `ETag`、`Last-Modified`、`Content-Length`を比較
-- 変更がある場合だけダウンロード
-- 一時ファイルへ保存後、原子的に置換
-- 更新失敗時は既存ローカルCSVを継続利用
+`TagComplete Neoインターフェース設定（CORE）`:
 
-既定URLはDanbooruタグCSVです。ネットワークアクセスを不要にしたい場合は自動更新をOFFのまま使用してください。
+- `Configure Hotkeys`: 候補操作キーをJSONで変更
+- `Configure colors`: Danbooru／e621カテゴリ色をJSONで変更
+- `Refresh internal temp files`: WildcardやEmbeddingなどの内部一覧を再作成
+
+`Multi-CSV検索設定（CSV+）`:
+
+- `Multi-CSV search engine`: 通常は推奨値の`Server index`
+- `Server search candidate pool`: 候補描画や検索範囲を調整する診断用設定
+- メモリ／ディスク保持数: 複数のCSV構成を切り替える場合のキャッシュ保持数
+- `Log Multi-CSV search timings`: 遅延原因を調べる場合だけ有効化
+- `Clear compiled search cache`: キャッシュ破損やCSV更新が反映されない場合だけ実行
+
+`Extra filename`と`Chant filename`の右横にある更新ボタンは、それぞれCSV一覧と
+Chant JSON一覧だけを再読込します。Forge Neo全体をリロードするボタンではありません。
+
+ホットキーと候補色は有効なJSONである必要があります。不具合の原因を切り分ける場合を除き、
+既定値を変更しないことを推奨します。
 
 ### 対象外
 
@@ -402,7 +432,7 @@ Wildcard ManagerやDynamic Promptsの既存ファイル構成を変更しませ�
 python tools/verify_extension.py
 ```
 
-これはForge本体を起動しない検証です。最終確認ではForge / Forge Neoの実環境で、
+これはForge Neo本体を起動しない検証です。最終確認ではForge Neoの実環境で、
 CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を確認してください。
 
 ### トラブルシューティング
@@ -437,9 +467,24 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 ## English
 
+### Project lineage
+
+```text
+DominikDoom/a1111-sd-webui-tagcomplete
+  └─ eduardoabreu81/sd-webui-tagcomplete-neo
+       └─ ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV
+```
+
+This repository is directly derived from `sd-webui-tagcomplete-neo`, which is
+itself a Forge Neo fork of DominikDoom's original TagComplete extension. This
+fork retains the established completion UI and providers while adding multiple
+tag CSVs, separate translation CSVs, natural-language dictionaries, and
+server-side search. The documentation is independently written
+for this fork's actual behavior and bundled data.
+
 ### Overview
 
-TagComplete Neo Multi-CSV is a Forge / Forge Neo fork of TagComplete Neo. It keeps
+TagComplete Neo Multi-CSV is a Forge Neo fork of TagComplete Neo. It keeps
 the familiar autocomplete UI and existing completion providers while adding a
 multi-source dictionary layer inspired by Danbooru Tag JP Assist.
 
@@ -450,9 +495,6 @@ Key additions:
 - Deduplicated merging of tags, aliases, translations, counts, and categories
 - Optional translated search and translated display
 - Natural-language dictionaries and Tag / Hybrid / Natural Language modes
-- User-created presets
-- Preset export/import backup
-- Optional collapsed quick controls near txt2img/img2img prompts (disabled by default)
 - Glob-style underscore exclusion patterns
 - Lazy loading of bundled CSV data on first prompt interaction
 
@@ -461,10 +503,11 @@ Key additions:
 Extract the folder into the WebUI `extensions` directory:
 
 ```text
-extensions/sd-webui-tagcomplete-neo-multicsv/
+extensions/TagComplete-Neo-Multi-CSV/
 ```
 
-Restart the WebUI, then open:
+Restart Forge Neo and wait until the status indicator near Generate changes
+from orange to green, then open:
 
 ```text
 Settings -> Tag Autocomplete / Multi-CSV
@@ -474,9 +517,24 @@ Disable other TagComplete forks while testing to avoid duplicate listeners.
 
 ### Data layout
 
-The extension bundles `danbooru_2025.csv`, the optional Anima artist/character
-files, a natural-language tag file, and the matching translation files.
-Only `danbooru_2025.csv` is selected by default.
+The extension bundles the following data. `danbooru_2025.csv` and
+`natural_language_tags.csv` are selected by default. e621 and the Anima files
+are bundled but remain optional.
+
+| File | Source / type | Best for | Default |
+|---|---|---|---|
+| `danbooru_2025.csv` | TagComplete Neo / Danbooru 2025 | Anime, SDXL, Illustrious | ✓ |
+| `natural_language_tags.csv` | Multi-CSV natural-language list | Natural-language and hybrid prompts | ✓ |
+| `e621.csv` | TagComplete Neo / e621 | Furry / anthro models | — |
+| `anima_artists.csv` | Multi-CSV Anima artists | Anima artist completion | — |
+| `anima_characters.csv` | Multi-CSV Anima characters | Anima character completion | — |
+| `merged_translations_dedup.csv` | Merged and deduplicated translations | Japanese tag search and display | ✓ |
+| `natural_language_ja.csv` | Natural-language translations | Japanese natural-language search and display | ✓ |
+
+The two upstream tag lists are taken from
+[sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo).
+The pre-merged Danbooru/e621 list is intentionally not bundled because this
+fork can select and merge multiple sources at runtime.
 
 ```text
 tags/
@@ -546,11 +604,18 @@ Selecting several very large CSV files increases first-load time and memory use
 in both Python and the browser. Keep indexed search enabled and select only the
 sources needed for the current workflow.
 
-### Presets
+### Presets (planned for the next version)
 
-Only user-created presets are shown in the Multi-CSV preset manager. Users can
-save new presets, overwrite, rename, delete, export, and import them. Backup
-JSON contains preset settings, not the CSV data files.
+The current release does not expose preset save, load, delete, backup, or quick
+control UI. The feature will return after it can update the standard Forge Neo
+Settings controls safely without reloading the UI. Existing
+`tags/config/presets.json` data is preserved.
+
+### Interface language
+
+Selecting `Japanese` translates the Multi-CSV controls and the standard
+TagComplete Neo setting labels. `Auto` follows Forge Neo localization or the
+browser language. Stored values and JSON keys remain unchanged for compatibility.
 
 ### Wildcards and underscore protection
 
@@ -563,6 +628,20 @@ __wildcards/eye-color__
 is always preserved. Underscore exclusions accept comma/newline-separated glob
 patterns such as `score_*`.
 
+### Advanced settings / troubleshooting
+
+Rarely used controls are grouped into two closed accordions at the bottom of the
+settings page. Keep the defaults during normal use.
+
+- `TagComplete Neo interface settings (CORE)` contains the hotkey JSON, suggestion
+  color JSON, and the internal temporary-file refresh action.
+- `Multi-CSV search settings (CSV+)` contains server search, candidate-pool,
+  cache, timing-log, and compiled-cache controls.
+- Keep `Multi-CSV search engine` on the recommended `Server index`; change the
+  remaining CSV+ controls only while diagnosing performance or stale cache data.
+- The refresh buttons beside Extra filename and Chant filename only refresh
+  their respective file lists; they do not reload Forge Neo.
+
 ### Offline verification
 
 Run the packaged verification script from the extracted extension directory:
@@ -572,14 +651,15 @@ python tools/verify_extension.py
 ```
 
 This validates Python/JavaScript syntax and the WebUI-independent merge, preset,
-and wildcard-protection logic. A real Forge / Forge Neo installation is still
+and wildcard-protection logic. A real Forge Neo installation is still
 required for final UI and integration testing.
 
 ### Compatibility notes
 
-The extension uses feature detection for Forge Neo and classic Forge paths and
-embedding APIs. Runtime compatibility can still depend on WebUI changes, other
-extensions, browser versions, and local model directory settings.
+The currently verified runtime is Forge Neo. Forge and reForge have not yet been
+verified and are not listed as supported environments. Runtime compatibility can
+still depend on WebUI changes, other extensions, browser versions, and local model
+directory settings.
 
 ---
 
@@ -592,7 +672,9 @@ extensions, browser versions, and local model directory settings.
 
 ## License
 
-Source code is released under the MIT License. See [LICENSE](LICENSE).
+The software is distributed under the MIT License. See [LICENSE](LICENSE).
+The original Dominik Reh copyright and permission notice are retained, and the
+copyright notice for this fork's modifications is included.
 
 CSV and translation data can have separate terms. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), the source page for each data

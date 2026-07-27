@@ -32,7 +32,12 @@ REQUIRED = [
     "javascript/zz_jpAssistUI.js",
     "scripts/jp_assist_core.py",
     "scripts/tag_autocomplete_helper.py",
+    "tags/tag_files/danbooru_2025.csv",
+    "tags/tag_files/e621.csv",
+    "tags/tag_files/natural_language_tags.csv",
     "tags/tag_files/README.md",
+    "tags/translation_files/merged_translations_dedup.csv",
+    "tags/translation_files/natural_language_ja.csv",
     "tags/translation_files/README.md",
 ]
 
@@ -96,10 +101,12 @@ def smoke_test() -> None:
         if not is_underscore_protected("__wildcards/eye-color__", []):
             fail("Wildcard preservation smoke test failed")
 
-        presets = PresetStore(store).list()["builtins"]
-        for name in ("SDXL", "Illustrious", "Pony", "Anima", "Krea 2", "Z-Image", "FLUX", "Qwen-Image"):
-            if name not in presets:
-                fail(f"Missing built-in preset: {name}")
+        presets = PresetStore(store)
+        if presets.list()["builtins"]:
+            fail("Built-in presets must not be exposed")
+        presets.save("Smoke Test", {"tag_files": ["danbooru.csv"], "prompt_mode": "Tag"})
+        if "Smoke Test" not in presets.list()["users"]:
+            fail("User preset smoke test failed")
 
 
 def main() -> None:

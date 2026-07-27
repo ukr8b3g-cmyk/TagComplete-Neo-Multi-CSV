@@ -6,6 +6,202 @@
     let activeController = null;
     let requestSequence = 0;
 
+    const timingState = {
+        active: null,
+        apiCallCount: 0,
+        abortedRequestCount: 0,
+        longTaskObserver: null,
+        longTasks: [],
+        enabled() {
+            return !!opts?.["tacjp_searchDebug"];
+        },
+        ensureLongTaskObserver() {
+            if (
+                this.longTaskObserver
+                || typeof PerformanceObserver === "undefined"
+                || !PerformanceObserver.supportedEntryTypes?.includes("longtask")
+            ) {
+                return;
+            }
+            this.longTaskObserver = new PerformanceObserver(list => {
+                for (const entry of list.getEntries()) {
+                    this.recordLongTask(entry);
+                }
+            });
+            this.longTaskObserver.observe({type: "longtask", buffered: true});
+        },
+        recordLongTask(entry) {
+            const task = {
+                start: Number(entry.startTime) || 0,
+                duration: Number(entry.duration) || 0,
+                name: String(entry.name || "unknown"),
+                attribution: Array.from(entry.attribution || []).map(item => ({
+                    name: String(item.name || ""),
+                    containerType: String(item.containerType || ""),
+                    containerName: String(item.containerName || ""),
+                    containerId: String(item.containerId || ""),
+                    containerSrc: String(item.containerSrc || ""),
+                })),
+            };
+            this.longTasks.push(task);
+            const cutoff = performance.now() - 20000;
+            this.longTasks = this.longTasks
+                .filter(item => item.start + item.duration >= cutoff)
+                .slice(-100);
+        },
+        input() {
+            if (!this.enabled()) {
+                this.active = null;
+                return;
+            }
+            this.ensureLongTaskObserver();
+            const now = performance.now();
+            this.active = {
+                sequence: null,
+                query: "",
+                started: now,
+                marks: {input: now},
+            };
+        },
+        debounceScheduled({wait, registeredAt, dueAt}) {
+            if (!this.enabled() || !this.active) return;
+            this.active.debounce = {
+                configuredMs: Number(wait) || 0,
+                registeredAt,
+                dueAt,
+                firedAt: null,
+            };
+        },
+        debounceFired({firedAt}) {
+            if (!this.enabled() || !this.active?.debounce) return;
+            this.active.debounce.firedAt = firedAt;
+        },
+        begin(sequence, query) {
+            if (!this.enabled()) return;
+            if (!this.active) this.input();
+            if (!this.active) return;
+            this.active.sequence = sequence;
+            this.active.query = String(query || "");
+        },
+        mark(name, sequence = null) {
+            const active = this.active;
+            if (!this.enabled() || !active) return;
+            if (sequence !== null && active.sequence !== sequence) return;
+            active.marks[name] = performance.now();
+        },
+        cancel(sequence) {
+            if (this.active?.sequence === sequence) this.active = null;
+        },
+        apiCall() {
+            this.apiCallCount += 1;
+        },
+        abortedRequest() {
+            this.abortedRequestCount += 1;
+        },
+        domMetrics(metrics, sequence = null) {
+            const active = this.active;
+            if (!this.enabled() || !active) return;
+            if (sequence !== null && active.sequence !== sequence) return;
+            active.domMetrics = {...metrics};
+        },
+        finish(sequence = null) {
+            const active = this.active;
+            if (!this.enabled() || !active) return;
+            if (sequence !== null && active.sequence !== sequence) return;
+            const names = [
+                "input",
+                "debounce_end",
+                "fetch_start",
+                "response_received",
+                "json_done",
+                "results_built",
+                "sort_done",
+                "dom_done",
+                "raf_done",
+                "paint_done",
+            ];
+            if (names.some(name => active.marks[name] === undefined)) return;
+            const timings = {query: active.query};
+            for (const name of names) {
+                timings[name] = Number(
+                    (active.marks[name] - active.started).toFixed(2),
+                );
+            }
+            if (active.debounce && active.debounce.firedAt !== null) {
+                timings.debounce_configured_ms = active.debounce.configuredMs;
+                timings.timer_registered = Number(
+                    (active.debounce.registeredAt - active.started).toFixed(2),
+                );
+                timings.timer_due = Number(
+                    (active.debounce.dueAt - active.started).toFixed(2),
+                );
+                timings.timer_fired = Number(
+                    (active.debounce.firedAt - active.started).toFixed(2),
+                );
+                timings.timer_lag_ms = Number(
+                    (active.debounce.firedAt - active.debounce.dueAt).toFixed(2),
+                );
+            }
+            if (active.marks.search_start !== undefined) {
+                timings.search_start = Number(
+                    (active.marks.search_start - active.started).toFixed(2),
+                );
+            }
+            for (const name of ["input_event_end", "main_thread_available"]) {
+                if (active.marks[name] !== undefined) {
+                    timings[name] = Number(
+                        (active.marks[name] - active.started).toFixed(2),
+                    );
+                }
+            }
+            timings.api_call_count = this.apiCallCount;
+            timings.aborted_request_count = this.abortedRequestCount;
+            if (active.domMetrics) {
+                Object.assign(timings, active.domMetrics);
+            }
+            const paintDone = active.marks.paint_done;
+            const relevantTasks = this.longTasks.filter(task => (
+                task.start < paintDone
+                && task.start + task.duration > active.started
+            ));
+            const timerDue = active.debounce?.dueAt;
+            const timerFired = active.debounce?.firedAt;
+            const timerTasks = timerDue === undefined || timerFired === null
+                ? []
+                : relevantTasks.filter(task => (
+                    task.start < timerFired
+                    && task.start + task.duration > timerDue
+                ));
+            timings.long_task_count = relevantTasks.length;
+            timings.long_task_total_ms = Number(
+                relevantTasks.reduce((sum, task) => sum + task.duration, 0).toFixed(2),
+            );
+            timings.long_task_max_ms = Number(
+                Math.max(0, ...relevantTasks.map(task => task.duration)).toFixed(2),
+            );
+            timings.timer_overlap_long_task_count = timerTasks.length;
+            timings.timer_overlap_long_task_ms = Number(
+                timerTasks.reduce((sum, task) => {
+                    const start = Math.max(task.start, timerDue);
+                    const end = Math.min(task.start + task.duration, timerFired);
+                    return sum + Math.max(0, end - start);
+                }, 0).toFixed(2),
+            );
+            timings.long_tasks = relevantTasks.slice(-5).map(task => ({
+                start: Number((task.start - active.started).toFixed(2)),
+                duration: Number(task.duration.toFixed(2)),
+                name: task.name,
+                attribution: task.attribution,
+            }));
+            console.info(
+                "[TagComplete Neo Multi-CSV] client timing "
+                + JSON.stringify(timings),
+            );
+            this.active = null;
+        },
+    };
+    globalThis.TACJPFastSearchTiming = timingState;
+
     function install() {
         if (installed) return;
         if (
@@ -145,6 +341,7 @@
                 const sequence = ++requestSequence;
                 if (activeController) activeController.abort();
                 activeController = new AbortController();
+                timingState.begin(sequence, tagword);
 
                 if (typeof updateTacStatusDot === "function") updateTacStatusDot("loading");
                 const body = TACJPFastSearchCore.makeRequest(
@@ -160,16 +357,20 @@
                 }
 
                 try {
+                    timingState.mark("fetch_start", sequence);
+                    timingState.apiCall();
                     const response = await fetch("tacjp/v1/search", {
                         method: "POST",
                         headers: {"Content-Type": "application/json"},
                         body: JSON.stringify(body),
                         signal: activeController.signal,
                     });
+                    timingState.mark("response_received", sequence);
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
                     const data = await response.json();
+                    timingState.mark("json_done", sequence);
                     if (sequence !== requestSequence) return [];
                     if (!data || !Array.isArray(data.results)) {
                         throw new Error(data?.error || "Search API returned no results array");
@@ -199,13 +400,22 @@
                         output.push(result);
                     }
                     appendLocalExtraResults(output, body);
+                    timingState.mark("results_built", sequence);
+                    Object.defineProperty(output, "_tacjpTimingSequence", {
+                        value: sequence,
+                    });
                     if (typeof updateTacStatusDot === "function") updateTacStatusDot("ready");
                     if (opts?.["tacjp_searchDebug"]) {
                         console.debug("[TagComplete Neo Multi-CSV] server search", data);
                     }
                     return output;
                 } catch (error) {
-                    if (error?.name === "AbortError" || sequence !== requestSequence) return [];
+                    if (error?.name === "AbortError") {
+                        timingState.abortedRequest();
+                        return [];
+                    }
+                    if (sequence !== requestSequence) return [];
+                    timingState.cancel(sequence);
                     if (typeof updateTacStatusDot === "function") updateTacStatusDot("error");
                     await switchToLegacy(error);
                     return [];

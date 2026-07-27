@@ -2,10 +2,20 @@ from __future__ import annotations
 
 import concurrent.futures
 import os
+import pickle
 import time
 from pathlib import Path
 
+import pytest
+
 from scripts.jp_assist_core import DataStore
+from scripts.tacjp_fast_search_common import (
+    CACHE_VERSION,
+    UINT32_MAX,
+    build_compact_index,
+    compact_index_get,
+    is_compact_index,
+)
 from scripts.tacjp_fast_search import FastSearchStore, SearchRequest
 
 
@@ -73,6 +83,36 @@ def request(query: str, **overrides) -> SearchRequest:
     return SearchRequest(**values)
 
 
+def test_compact_index_boundaries_and_reproducibility() -> None:
+    first = build_compact_index(
+        {
+            "large": range(100_000),
+            "empty": (),
+            "small": (3, 7, 9),
+        }
+    )
+    second = build_compact_index(
+        {
+            "small": (3, 7, 9),
+            "empty": (),
+            "large": range(100_000),
+        }
+    )
+
+    assert CACHE_VERSION == 6
+    assert is_compact_index(first)
+    assert len(first["offsets"]) == len(first["keys"]) + 1
+    assert first["offsets"][-1] == len(first["values"])
+    assert list(compact_index_get(first, "empty")) == []
+    assert list(compact_index_get(first, "small")) == [3, 7, 9]
+    assert len(compact_index_get(first, "large")) == 100_000
+    assert compact_index_get(first, "missing") is None
+    assert pickle.dumps(first) == pickle.dumps(second)
+
+    with pytest.raises(OverflowError):
+        build_compact_index({"overflow": (UINT32_MAX + 1,)})
+
+
 def test_six_csv_search_and_deduplication(tmp_path: Path) -> None:
     store = create_six_file_fixture(tmp_path)
     result = store.search(request("髪"))
@@ -114,11 +154,22 @@ def test_persistent_index_is_reused_after_restart(tmp_path: Path) -> None:
     store = create_six_file_fixture(tmp_path)
     first = store.search(request("blue"))
     assert first["cache"] == "build"
+    assert first["build_ms"] == first["original_build_ms"]
+    assert first["restore_ms"] == 0.0
+    assert 0.0 <= first["search_only_ms"] <= first["search_ms"]
 
     restarted = FastSearchStore(store.data_store)
     second = restarted.search(request("blue"))
     assert second["cache"] == "disk"
     assert second["results"][0][0] == "blue_eyes"
+    assert second["build_ms"] == second["original_build_ms"]
+    assert second["original_build_ms"] == first["original_build_ms"]
+    assert second["restore_ms"] >= 0.0
+    assert 0.0 <= second["search_only_ms"] <= second["search_ms"]
+
+    third = restarted.search(request("blue"))
+    assert third["cache"] == "memory"
+    assert third["restore_ms"] == 0.0
 
 
 def test_csv_change_invalidates_compiled_index(tmp_path: Path) -> None:

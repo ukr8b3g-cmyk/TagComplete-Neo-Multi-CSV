@@ -10,6 +10,11 @@ This project is a fork derived from:
 The upstream source code is distributed under the MIT License. The original
 copyright and license notice are retained in `LICENSE`.
 
+The bundled `tags/tag_files/danbooru_2025.csv` and
+`tags/tag_files/e621.csv` files are copied from the TagComplete Neo repository.
+Their database contents can be subject to the terms of the respective source
+services in addition to the software license.
+
 ## Optional Danbooru tag and Japanese translation data
 
 Users may place data derived from the following resource in `tags/tag_files`

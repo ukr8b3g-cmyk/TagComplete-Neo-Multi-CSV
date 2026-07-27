@@ -275,6 +275,11 @@ async function loadExtraTags(c) {
     extras = [];
     if (c.extra.extraFile && c.extra.extraFile !== "None") {
         try {
+            const files = await fetchTacAPI("tacjp/v1/files");
+            const available = Array.isArray(files?.tag_files)
+                ? files.tag_files.map(item => String(item?.name || ""))
+                : [];
+            if (!available.includes(c.extra.extraFile)) return;
             extras = await loadCSV(`${tagBasePath}/tag_files/${c.extra.extraFile}`) || [];
             extras.forEach(e => {
                 if (e[4]) translations.set(e[0], e[4]);
@@ -900,10 +905,13 @@ async function insertTextAtCursor(textArea, result, tagword, tabCompletedWithout
     }
 }
 
-function addResultsToList(textArea, results, tagword, resetList) {
+function addResultsToList(textArea, results, tagword, resetList, timingSequence = null) {
     let textAreaId = getTextAreaIdentifier(textArea);
     let resultDiv = gradioApp().querySelector('.autocompleteResults' + textAreaId);
     let resultsList = resultDiv.querySelector('ul');
+    const measureDom = globalThis.TACJPFastSearchTiming?.enabled()
+        && timingSequence !== null;
+    const clearStart = measureDom ? performance.now() : 0;
 
     // Reset list, selection and scrollTop since the list changed
     if (resetList) {
@@ -913,6 +921,7 @@ function addResultsToList(textArea, results, tagword, resetList) {
         resultDiv.scrollTop = 0;
         resultCount = 0;
     }
+    const clearMs = measureDom ? performance.now() - clearStart : 0;
 
     // Find right colors from config. With multiple files the category scheme is
     // carried by each result; selected filenames are only used for the used-tag marker.
@@ -952,6 +961,9 @@ function addResultsToList(textArea, results, tagword, resetList) {
         ? globalThis.TACJPCore.normalizeSearch(value)
         : String(value || "").toLocaleLowerCase().replaceAll("_", " ").trim();
     const normalizedTagword = normalizeDisplaySearch(tagword);
+    const buildStart = measureDom ? performance.now() : 0;
+    let eventRegistrationMs = 0;
+    let renderedItems = 0;
     for (let i = resultCount; i < nextLength; i++) {
         let result = results[i];
 
@@ -1150,6 +1162,7 @@ function addResultsToList(textArea, results, tagword, resetList) {
 
         // Check if it's a negative prompt
         let isNegative = textAreaId.includes("n");
+        const eventStart = measureDom ? performance.now() : 0;
 
         // Add click listener
         li.addEventListener("click", (e) => {
@@ -1190,17 +1203,42 @@ function addResultsToList(textArea, results, tagword, resetList) {
                 }, { once: true });
             });
         }
+        if (measureDom) {
+            eventRegistrationMs += performance.now() - eventStart;
+        }
 
         // Add element to fragment
         fragment.appendChild(li);
+        renderedItems += 1;
     }
+    const buildMs = measureDom ? performance.now() - buildStart : 0;
+    const appendStart = measureDom ? performance.now() : 0;
     resultsList.appendChild(fragment);
+    const appendMs = measureDom ? performance.now() - appendStart : 0;
     resultCount = nextLength;
 
     if (resetList) {
         selectedTag = null;
         oldSelectedTag = null;
         resultDiv.scrollTop = 0;
+    }
+    if (measureDom) {
+        const layoutStart = performance.now();
+        void resultsList.offsetHeight;
+        const layoutMs = performance.now() - layoutStart;
+        const attributeMs = Math.max(0, buildMs - eventRegistrationMs);
+        globalThis.TACJPFastSearchTiming?.domMetrics({
+            dom_items: renderedItems,
+            dom_clear_ms: Number(clearMs.toFixed(2)),
+            dom_build_ms: Number(buildMs.toFixed(2)),
+            dom_attribute_ms: Number(attributeMs.toFixed(2)),
+            dom_event_ms: Number(eventRegistrationMs.toFixed(2)),
+            dom_append_ms: Number(appendMs.toFixed(2)),
+            dom_layout_ms: Number(layoutMs.toFixed(2)),
+            dom_per_item_ms: Number(
+                (renderedItems ? buildMs / renderedItems : 0).toFixed(4),
+            ),
+        }, timingSequence);
     }
 }
 
@@ -1479,9 +1517,16 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
 
     // Needed for slicing check later
     let normalTags = false;
+    let timingSequence = null;
 
     // Process all parsers
     let resultCandidates = (await processParsers(textArea, prompt))?.filter(x => x.length > 0);
+    const timedCandidate = resultCandidates?.find(
+        candidate => candidate?._tacjpTimingSequence !== undefined,
+    );
+    if (timedCandidate) {
+        timingSequence = timedCandidate._tacjpTimingSequence;
+    }
     // If one ore more result candidates match, use their results
     if (resultCandidates && resultCandidates.length > 0) {
         // Flatten our candidate(s)
@@ -1679,11 +1724,22 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
     if (!TAC_CFG.showAllResults && normalTags) {
         results = results.slice(0, TAC_CFG.maxResults + resultCountBeforeNormalTags);
     }
+    globalThis.TACJPFastSearchTiming?.mark("sort_done", timingSequence);
 
     // Defer DOM rendering to next frame so input stays responsive
     requestAnimationFrame(() => {
-        addResultsToList(textArea, results, tagword, true);
+        addResultsToList(textArea, results, tagword, true, timingSequence);
         showResults(textArea);
+        globalThis.TACJPFastSearchTiming?.mark("dom_done", timingSequence);
+        if (globalThis.TACJPFastSearchTiming?.enabled()) {
+            requestAnimationFrame(() => {
+                globalThis.TACJPFastSearchTiming?.mark("raf_done", timingSequence);
+                requestAnimationFrame(() => {
+                    globalThis.TACJPFastSearchTiming?.mark("paint_done", timingSequence);
+                    globalThis.TACJPFastSearchTiming?.finish(timingSequence);
+                });
+            });
+        }
     });
 }
 
@@ -1852,7 +1908,19 @@ function addAutocompleteToArea(area) {
         hideResults(area);
 
         // Debounced handlers per textarea to avoid shared timeout interference
-        const debouncedAutocomplete = debounce(() => autocomplete(area, area.value), Math.min(TAC_CFG.delayTime, 50));
+        const autocompleteDelay = Math.min(TAC_CFG.delayTime, 50);
+        const debouncedAutocomplete = debounce(() => {
+            globalThis.TACJPFastSearchTiming?.mark("search_start");
+            return autocomplete(area, area.value);
+        }, autocompleteDelay, {
+            scheduled: timing => {
+                globalThis.TACJPFastSearchTiming?.debounceScheduled(timing);
+            },
+            fired: timing => {
+                globalThis.TACJPFastSearchTiming?.debounceFired(timing);
+                globalThis.TACJPFastSearchTiming?.mark("debounce_end");
+            },
+        });
         const debouncedUpdateRuby = debounce(() => updateRuby(area, area.value), 300);
 
         // Add autocomplete event listener
@@ -1860,6 +1928,15 @@ function addAutocompleteToArea(area) {
             // Cancel autocomplete itself if the event has no inputType (e.g. because it was triggered by the updateInput() function)
             if (!e.inputType && !tacSelfTrigger) return;
             tacSelfTrigger = false;
+            globalThis.TACJPFastSearchTiming?.input();
+            if (globalThis.TACJPFastSearchTiming?.enabled()) {
+                queueMicrotask(() => {
+                    globalThis.TACJPFastSearchTiming?.mark("input_event_end");
+                });
+                setTimeout(() => {
+                    globalThis.TACJPFastSearchTiming?.mark("main_thread_available");
+                }, 0);
+            }
 
             // Block hide we are composing (IME), so enter doesn't close the results
             if (e.isComposing) {
@@ -1877,6 +1954,8 @@ function addAutocompleteToArea(area) {
                 debouncedUpdateRuby();
                 await debouncedAutocomplete();
             } else {
+                globalThis.TACJPFastSearchTiming?.mark("debounce_end");
+                globalThis.TACJPFastSearchTiming?.mark("search_start");
                 await autocomplete(area, area.value);
             }
             checkKeywordInsertionUndo(area, e);

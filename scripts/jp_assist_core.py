@@ -4,8 +4,6 @@ The module intentionally avoids WebUI imports so the merge and preset logic can 
 unit-tested outside Forge. WebUI integration lives in tag_autocomplete_helper.py.
 """
 
-from __future__ import annotations
-
 import csv
 import fnmatch
 import json
@@ -268,7 +266,7 @@ def is_underscore_protected(tag: str, patterns: str | Sequence[str]) -> bool:
     return any(fnmatch.fnmatchcase(text.casefold(), pattern.casefold()) for pattern in parse_patterns(patterns))
 
 
-@dataclass(slots=True)
+@dataclass
 class TagRecord:
     tag: str
     category: int | None = None
@@ -297,7 +295,7 @@ class TagRecord:
         ]
 
 
-@dataclass(slots=True)
+@dataclass
 class FileInfo:
     name: str
     size: int
@@ -587,7 +585,7 @@ class DataStore:
 
 
 class PresetStore:
-    """Built-in and user-editable preset storage."""
+    """User-editable preset storage."""
 
     VERSION = 1
 
@@ -712,29 +710,24 @@ class PresetStore:
     def list(self) -> dict[str, Any]:
         with self._lock:
             stored = self._read()
-            builtins = self.default_presets()
-            overrides = stored.get("builtin_overrides") or {}
-            for name, settings in overrides.items():
-                if name in builtins and isinstance(settings, Mapping):
-                    builtins[name] = self.validate_settings(settings)
             users = {
                 name: self.validate_settings(settings)
                 for name, settings in (stored.get("user_presets") or {}).items()
                 if isinstance(name, str) and isinstance(settings, Mapping)
             }
-            return {"version": self.VERSION, "builtins": builtins, "users": users}
+            # Keep the response shape compatible with earlier JP Assist builds,
+            # but expose only user-created presets.
+            return {"version": self.VERSION, "builtins": {}, "users": users}
 
     def get(self, name: str) -> dict[str, Any] | None:
-        data = self.list()
-        return data["users"].get(name) or data["builtins"].get(name)
+        return self.list()["users"].get(name)
 
     def save(self, name: str, settings: Mapping[str, Any], *, builtin_override: bool = False) -> dict[str, Any]:
         clean_name = self._validate_name(name)
         validated = self.validate_settings(settings)
         with self._lock:
             stored = self._read()
-            key = "builtin_overrides" if builtin_override and clean_name in self.default_presets() else "user_presets"
-            stored.setdefault(key, {})[clean_name] = validated
+            stored.setdefault("user_presets", {})[clean_name] = validated
             self._write(stored)
         return validated
 
@@ -765,14 +758,9 @@ class PresetStore:
         return {"version": self.VERSION, "users": data["users"]}
 
     def import_data(self, payload: Mapping[str, Any], *, replace: bool = False) -> dict[str, Any]:
-        builtins = payload.get("builtins") or payload.get("builtin_overrides") or {}
         users = payload.get("users") or payload.get("user_presets") or {}
         with self._lock:
             stored = {"version": self.VERSION, "builtin_overrides": {}, "user_presets": {}} if replace else self._read()
-            known_builtins = self.default_presets()
-            for name, settings in builtins.items():
-                if name in known_builtins and isinstance(settings, Mapping):
-                    stored.setdefault("builtin_overrides", {})[name] = self.validate_settings(settings)
             for name, settings in users.items():
                 if isinstance(name, str) and isinstance(settings, Mapping):
                     try:
