@@ -113,9 +113,6 @@ Forge-Neo/
 次の画像は、日本語表示での主要設定、挿入設定、Animaアーティストタグ、
 Multi-CSV検索設定の順です。
 
-<p align="center">
-  <img src="docs/images/settings-ja.png" alt="TagComplete Neo Multi-CSV 日本語設定画面" width="538">
-</p>
 
 主に変更する項目:
 
@@ -591,9 +588,6 @@ Disable other TagComplete forks while testing to avoid duplicate listeners.
 The following image shows the main settings, insertion controls, Anima artist
 prefix option, and advanced Multi-CSV search controls in English.
 
-<p align="center">
-  <img src="docs/images/settings-en.png" alt="TagComplete Neo Multi-CSV English settings" width="550">
-</p>
 
 Controls used most often:
 
