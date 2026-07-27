@@ -38,9 +38,14 @@
         const settings = options || {};
         const rawQuery = String(query || "").replace(/[\n\r]/g, "");
         const substringOnly = rawQuery.startsWith("*");
+        const tagFiles = optionList(config?.tagFiles);
+        const extraFile = config?.extra?.extraFile;
+        if (extraFile && extraFile !== "None" && !tagFiles.includes(extraFile)) {
+            tagFiles.push(extraFile);
+        }
         return {
             query: substringOnly ? rawQuery.slice(1) : rawQuery,
-            tag_files: optionList(config?.tagFiles),
+            tag_files: tagFiles,
             translation_files: optionList(config?.translation?.translationFiles),
             prompt_mode: config?.promptMode || "Tag",
             context_natural: contextLooksNatural(prompt, cursor),
