@@ -8,7 +8,7 @@
 
 A Forge Neo fork of TagComplete Neo with multiple CSV sources,
 separate translation files, Japanese/translated search, natural-language
-vocabularies, and safe prompt insertion.
+vocabularies, user presets, and safe prompt insertion.
 
 </div>
 
@@ -27,7 +27,7 @@ DominikDoom/a1111-sd-webui-tagcomplete
 - **原点:** `a1111-sd-webui-tagcomplete` — TagCompleteの基本機能
 - **直接のフォーク元:** `sd-webui-tagcomplete-neo` — Forge Neo対応、互換性・性能改善
 - **このフォーク:** 複数タグCSV、分離翻訳CSV、自然言語辞書、
-  サーバー検索を追加
+  サーバー検索、永続キャッシュ、ユーザープリセットを追加
 
 元プロジェクトの機能と成果を尊重しつつ、本READMEはMulti-CSV版の実際の構成・
 設定・検証結果に合わせて独自に記述しています。
@@ -81,7 +81,9 @@ DominikDoom/a1111-sd-webui-tagcomplete
 - 日本語・翻訳表示のON/OFF
 - `Tag` / `Hybrid` / `Natural Language` / `Custom`モード
 - アンダースコア保護パターンのワイルドカード指定
-- 大容量CSV向けサーバー検索と永続キャッシュ
+- 大容量CSV向けサーバー検索とv6永続キャッシュ
+- ユーザーが保存したプリセットだけを管理
+- Animaアーティストタグへの`@`付与設定
 
 ### インストール
 
@@ -106,6 +108,28 @@ Forge-Neo/
 既存のTagComplete系拡張と同時に有効化すると、同じ入力欄へ複数の補完処理が登録される場合があります。
 動作確認時は、他のTagComplete系拡張を一時的に無効化してください。
 
+### 設定画面
+
+次の画像は、日本語表示での主要設定、挿入設定、Animaアーティストタグ、
+Multi-CSV検索設定の順です。
+
+<p align="center">
+  <img src="docs/images/settings-ja.png" alt="TagComplete Neo Multi-CSV 日本語設定画面" width="538">
+</p>
+
+主に変更する項目:
+
+- **タグファイル（複数選択）:** 候補の本体となるタグ・自然言語CSV
+- **翻訳ファイル（複数選択）:** 翻訳・別名を追加する任意CSV
+- **プロンプトモード:** タグ優先、Hybrid、自然言語優先、同順位
+- **候補に翻訳を表示:** 翻訳CSVの表示をON/OFF
+- **辞書種別を表示:** `TAG` / `NL` / `CUSTOM`ラベルを任意表示
+- **自然言語候補を識別表示:** 自然言語辞書の候補を見分けやすく表示
+- **更新ボタン:** 対応するファイル一覧だけを再読込
+
+通常利用では、最初の設定ブロックだけを確認すれば十分です。
+最下部の`Multi-CSV検索設定`は、キャッシュ破損や性能調査時を除き推奨初期値のまま使用してください。
+
 ### データフォルダ
 
 タグCSVと翻訳CSVは次のフォルダーへ同梱されます。ユーザーCSVも追加でき、
@@ -116,7 +140,7 @@ tags/
 ├─ tag_files/          # タグ・自然言語CSV
 ├─ translation_files/  # 翻訳・別名CSV
 ├─ chants/             # Chant JSON
-├─ config/             # 内部設定、更新メタデータ
+├─ config/             # 内部設定、ユーザープリセット
 ├─ cache/              # 実行時キャッシュ
 └─ temp/               # LoRA、Embedding、Wildcard等の一時一覧
 ```
@@ -203,7 +227,7 @@ long_hair,長髪
 翻訳CSVを選択しなければ、翻訳機能なしで通常のTagCompleteとして動作します。
 日本語専用の固定処理ではないため、他言語の翻訳CSVも利用できます。
 
-### 複数CSV
+### 複数CSVとサーバー検索
 
 `Tag files`と`Translation files`は複数選択ドロップダウンです。
 
@@ -232,8 +256,21 @@ Translation files:
 
 これは候補データの重複統合です。入力済みプロンプト本文を自動削除・整形する機能ではありません。
 
-大きなCSVを複数選択すると、初回読み込み時間とPython・ブラウザ双方のメモリ使用量が増えます。
-通常は用途に必要な辞書だけを選び、`Use indexed search`をONのまま利用してください。
+推奨の`Server index`では、統合済み全データをブラウザへ送らず、
+Python側に保持して現在の検索に必要な候補だけを返します。
+
+- 最初の検索で、選択中CSV構成のv6検索インデックスを構築
+- 同じセッションではメモリキャッシュを利用
+- Forge Neo再起動後はディスクキャッシュから復元
+- 選択CSVのファイル名・サイズ・更新日時が変わると自動再構築
+- キャッシュは`tags/cache/fast-search-v6/`へ保存
+- ブラウザへ返す候補数は`Server search candidate pool`で制限
+
+大きなCSVを増やすほど、初回構築時間とPython側のメモリ使用量は増えます。
+一方、Server indexではブラウザへ全CSVを転送しないため、クライアント負荷は候補プール内に抑えられます。
+通常は用途に必要な辞書だけを選択してください。
+
+性能設計と実機計測の詳細は[PERFORMANCE.md](PERFORMANCE.md)を参照してください。
 
 ### プロンプトモード
 
@@ -262,11 +299,22 @@ Danbooruなどのタグ辞書を優先します。SDXL、Illustrious XL、Pony�
 項目名も日本語で表示します。`Auto`ではForge NeoのLocalization設定またはブラウザー言語に
 合わせます。設定値やJSON内のキーは翻訳せず、互換性を維持します。
 
-### プリセット（次バージョンで実装予定）
+### ユーザープリセット
 
-プリセットの保存・ロード・削除・バックアップUIは、現行版では表示しません。
-Forge Neoをリロードせず、標準Settings欄まで安全に同期できる実装を確認してから
-次バージョンで追加する予定です。既存の`tags/config/presets.json`は削除しません。
+現行版では、Danbooru・SDXL・Animaなどの標準プリセットは表示せず、
+ユーザーが保存したプリセットだけを管理します。
+
+利用できる操作:
+
+- 現在のMulti-CSV設定を名前付きで保存
+- 保存済みプリセットを適用
+- 保存済みプリセットを削除
+- JSONへエクスポート
+- JSONからインポート
+- 選択中のCSVが別環境に存在しない場合、その参照だけを安全に除外して適用
+
+既存のユーザープリセットデータは維持されます。
+保存済みプリセットがない場合は「保存済みプリセットなし」と表示されます。
 
 ### 検索
 
@@ -301,10 +349,10 @@ Forge Neoをリロードせず、標準Settings欄まで安全に同期できる
 追加表示は任意です。
 
 - `Show source labels`: `TAG` / `NL` / `CUSTOM`
-- `Use a distinct color for natural-language suggestions`
+- `Mark natural-language suggestions`
 - `Display translations in suggestions`
 
-追加色とソースラベルは初期値OFFです。
+ソースラベルは初期値OFF、自然言語識別と翻訳表示は初期値ONです。
 
 ### 挿入形式
 
@@ -334,6 +382,16 @@ long hair, blue eyes, looking at viewer,
 - `wildcard`: Wildcard構文を完全保持
 
 自然言語CSVに`insert_mode`がない場合、単語1個は`word`、複数語は`phrase`として推定します。
+
+### Animaアーティストタグの`@`付与
+
+`アーティストタグに「@」を付ける`は、アーティスト候補を挿入する際の接頭辞を制御します。
+
+- **Off:** `@`を付けない。初期値
+- **On:** 対象アーティストタグへ常に`@`を付ける
+- **Auto:** 読み込まれているモデルがANIMA系と判定された場合だけ`@`を付ける
+
+Anima以外のモデルや、モデル判定に依存させたくない場合は`Off`または`On`を明示してください。
 
 ### アンダースコア保護
 
@@ -397,13 +455,19 @@ Wildcard ManagerやDynamic Promptsの既存ファイル構成を変更しませ�
 - `Configure colors`: Danbooru／e621カテゴリ色をJSONで変更
 - `Refresh internal temp files`: WildcardやEmbeddingなどの内部一覧を再作成
 
-`Multi-CSV検索設定（CSV+）`:
+`Multi-CSV検索設定（CSV+）`の推奨値:
 
-- `Multi-CSV search engine`: 通常は推奨値の`Server index`
-- `Server search candidate pool`: 候補描画や検索範囲を調整する診断用設定
-- メモリ／ディスク保持数: 複数のCSV構成を切り替える場合のキャッシュ保持数
-- `Log Multi-CSV search timings`: 遅延原因を調べる場合だけ有効化
-- `Clear compiled search cache`: キャッシュ破損やCSV更新が反映されない場合だけ実行
+| 項目 | 推奨値 | 用途 |
+|---|---:|---|
+| `Multi-CSV search engine` | `Server index` | サーバー側インデックス検索 |
+| `Server search candidate pool` | `250` | ローカル頻度順位へ渡す候補数 |
+| `Persist compiled Multi-CSV search indexes` | ON | 再起動後にディスクキャッシュを再利用 |
+| `Compiled search configurations kept in memory` | `4` | セッション内のCSV構成保持数 |
+| `Compiled search configurations kept on disk` | `8` | ディスク上のCSV構成保持数 |
+| `Log Multi-CSV search timings` | OFF | 性能調査時だけ有効化 |
+
+`Clear compiled search cache`は、キャッシュ破損やCSV更新が反映されない場合だけ実行してください。
+通常はCSV変更を自動検出するため、手動削除は不要です。
 
 `Extra filename`と`Chant filename`の右横にある更新ボタンは、それぞれCSV一覧と
 Chant JSON一覧だけを再読込します。Forge Neo全体をリロードするボタンではありません。
@@ -463,6 +527,12 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 `Underscore replacement exclusion patterns`へ完全名またはパターンを追加してください。
 
+#### 最初の検索だけ時間がかかる
+
+初回は選択中CSVのインデックス構築、または再起動後のディスクキャッシュ復元が発生します。
+同じセッションの2回目以降はメモリキャッシュを利用します。
+継続的に遅い場合だけ`Log Multi-CSV search timings`を有効にして確認してください。
+
 ---
 
 ## English
@@ -478,15 +548,14 @@ DominikDoom/a1111-sd-webui-tagcomplete
 This repository is directly derived from `sd-webui-tagcomplete-neo`, which is
 itself a Forge Neo fork of DominikDoom's original TagComplete extension. This
 fork retains the established completion UI and providers while adding multiple
-tag CSVs, separate translation CSVs, natural-language dictionaries, and
-server-side search. The documentation is independently written
-for this fork's actual behavior and bundled data.
+tag CSVs, separate translation CSVs, natural-language dictionaries,
+server-side search, persistent caching, and user presets.
 
 ### Overview
 
-TagComplete Neo Multi-CSV is a Forge Neo fork of TagComplete Neo. It keeps
-the familiar autocomplete UI and existing completion providers while adding a
-multi-source dictionary layer inspired by Danbooru Tag JP Assist.
+TagComplete Neo Multi-CSV keeps the familiar autocomplete UI and existing
+completion providers while adding a multi-source dictionary layer inspired by
+Danbooru Tag JP Assist.
 
 Key additions:
 
@@ -496,7 +565,9 @@ Key additions:
 - Optional translated search and translated display
 - Natural-language dictionaries and Tag / Hybrid / Natural Language modes
 - Glob-style underscore exclusion patterns
-- Lazy loading of bundled CSV data on first prompt interaction
+- Server-side search with a persistent v6 cache
+- User-only presets without bundled model presets
+- Configurable `@` prefix for Anima artist tags
 
 ### Installation
 
@@ -514,6 +585,28 @@ Settings -> Tag Autocomplete / Multi-CSV
 ```
 
 Disable other TagComplete forks while testing to avoid duplicate listeners.
+
+### Settings overview
+
+The following image shows the main settings, insertion controls, Anima artist
+prefix option, and advanced Multi-CSV search controls in English.
+
+<p align="center">
+  <img src="docs/images/settings-en.png" alt="TagComplete Neo Multi-CSV English settings" width="550">
+</p>
+
+Controls used most often:
+
+- **Tag files (multiple selection):** tag and natural-language CSV sources
+- **Translation files (multiple selection):** optional translation and alias files
+- **Prompt mode:** Tag priority, Hybrid, Natural Language priority, or Equal priority
+- **Display translations in suggestions:** controls translated labels in the popup
+- **Show source labels:** optionally displays `TAG` / `NL` / `CUSTOM`
+- **Mark natural-language suggestions:** visually distinguishes natural-language rows
+- **Refresh buttons:** reload only the corresponding file list
+
+Keep the advanced Multi-CSV search controls at their recommended defaults
+unless diagnosing cache or performance problems.
 
 ### Data layout
 
@@ -591,7 +684,9 @@ long_hair,"長髪,ロングヘア","髪が長い"
 
 Translations are optional and not limited to Japanese.
 
-### Multiple sources and merge rules
+### Multiple sources and server search
+
+Merge rules:
 
 - A tag is displayed once even if it appears in multiple files.
 - Aliases and translations are unioned and deduplicated.
@@ -600,22 +695,103 @@ Translations are optional and not limited to Japanese.
 - Source files and source types are retained internally.
 - Selection order is treated as source priority.
 
-Selecting several very large CSV files increases first-load time and memory use
-in both Python and the browser. Keep indexed search enabled and select only the
-sources needed for the current workflow.
+With the recommended `Server index`, the complete merged dataset remains on
+the Python side and the browser receives only a bounded candidate pool.
 
-### Presets (planned for the next version)
+- The first search builds a v6 index for the selected CSV combination.
+- Later searches in the same session use the memory cache.
+- After a Forge Neo restart, the index is restored from disk.
+- File name, size, or modification-time changes automatically invalidate the cache.
+- Compiled data is stored under `tags/cache/fast-search-v6/`.
+- `Server search candidate pool` controls how many candidates are returned before local frequency sorting.
 
-The current release does not expose preset save, load, delete, backup, or quick
-control UI. The feature will return after it can update the standard Forge Neo
-Settings controls safely without reloading the UI. Existing
-`tags/config/presets.json` data is preserved.
+Selecting more large files increases initial build time and Python memory use,
+but it does not require transferring the full merged dataset to the browser.
+See [PERFORMANCE.md](PERFORMANCE.md) for architecture and measured reference results.
+
+### Prompt modes
+
+- **Tag priority:** best for Danbooru-style SDXL, Illustrious, and Pony workflows.
+- **Auto (Hybrid):** combines tag and natural-language dictionaries; intended for workflows such as Anima.
+- **Natural language priority:** intended for Krea 2, Z-Image, FLUX, and Qwen-Image.
+- **Equal priority:** uses the selected sources without an additional source preference.
+
+Prompt mode changes ranking and insertion behavior; it does not force a fixed CSV selection.
 
 ### Interface language
 
 Selecting `Japanese` translates the Multi-CSV controls and the standard
 TagComplete Neo setting labels. `Auto` follows Forge Neo localization or the
 browser language. Stored values and JSON keys remain unchanged for compatibility.
+
+### User presets
+
+Only user-created presets are shown. Bundled Danbooru, SDXL, and Anima presets
+are intentionally hidden.
+
+Available actions:
+
+- Save the current Multi-CSV settings under a name
+- Apply a saved preset
+- Delete a saved preset
+- Export presets as JSON
+- Import presets from JSON
+- Safely omit file references that do not exist on the current installation
+
+Existing user preset data is preserved. When no user presets exist, the UI
+shows that there are no saved presets.
+
+### Search and suggestions
+
+Search covers tags, aliases, translations, translated aliases,
+natural-language words and phrases, and custom dictionaries.
+
+Ranking order:
+
+1. Exact match
+2. Prefix match
+3. Word-prefix match
+4. Substring match
+
+Underscores and spaces are treated as equivalent while searching.
+Translated search and translated display can be controlled separately.
+
+Optional suggestion metadata includes:
+
+- `TAG` / `NL` / `CUSTOM` source labels
+- Natural-language row marking
+- Translated display labels
+
+### Prompt insertion
+
+The default insertion settings:
+
+- Replace underscores with spaces
+- Escape parentheses
+- Append a comma after tag or phrase completion
+- Append a space after the separator
+- Keep a trailing prompt space
+
+`insert_mode` behavior:
+
+- `tag`: comma and space
+- `phrase`: comma and space
+- `word`: space only
+- `raw`: preserve the text
+- `wildcard`: preserve wildcard syntax
+
+When a natural-language CSV omits `insert_mode`, a single word is inferred as
+`word` and a multi-word value as `phrase`.
+
+### Anima artist `@` prefix
+
+`Add '@' to artist tags` controls the prefix used when inserting artist suggestions.
+
+- **Off:** never add `@`; default
+- **On:** always add `@` to applicable artist tags
+- **Auto:** add `@` only when the loaded checkpoint is detected as an ANIMA model
+
+Use explicit `Off` or `On` when model detection should not control insertion.
 
 ### Wildcards and underscore protection
 
@@ -637,8 +813,9 @@ settings page. Keep the defaults during normal use.
   color JSON, and the internal temporary-file refresh action.
 - `Multi-CSV search settings (CSV+)` contains server search, candidate-pool,
   cache, timing-log, and compiled-cache controls.
-- Keep `Multi-CSV search engine` on the recommended `Server index`; change the
-  remaining CSV+ controls only while diagnosing performance or stale cache data.
+- Recommended values are `Server index`, pool `250`, persistent cache enabled,
+  four memory configurations, eight disk configurations, and timing logs disabled.
+- `Clear compiled search cache` is intended only for damaged or stale cache diagnosis.
 - The refresh buttons beside Extra filename and Chant filename only refresh
   their respective file lists; they do not reload Forge Neo.
 
