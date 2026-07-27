@@ -18,7 +18,10 @@ global.TAC_CFG = {
         searchByTranslation: true,
         liveTranslation: false,
     },
-    extra: {extraFile: "None"},
+    extra: {
+        extraFile: "extra-quality-tags.csv",
+        addMode: "Insert before",
+    },
 };
 global.QUEUE_AFTER_CONFIG_CHANGE = [];
 global.tagword = "long";
@@ -26,7 +29,12 @@ global.allTags = [];
 global.tagIndex = new Map();
 global.translations = new Map();
 global.tagsLoaded = false;
-global.loadExtraTags = async () => {};
+global.extras = [];
+global.loadExtraTags = async () => {
+    global.extras = [
+        ["long_quality", 5, "Extra tag", "longquality", "追加品質"],
+    ];
+};
 global.buildTagIndex = async () => {};
 let legacyLoads = 0;
 global.loadTags = async () => { legacyLoads += 1; };
@@ -36,7 +44,7 @@ global.BaseTagParser = class {
     }
 };
 global.PARSERS = [];
-global.ResultType = {tag: 1};
+global.ResultType = {tag: 1, extra: 2};
 global.AutocompleteResult = class {
     constructor(text, type) {
         this.text = text;
@@ -46,10 +54,23 @@ global.AutocompleteResult = class {
 global.fetch = async (_url, options) => {
     const body = JSON.parse(options.body);
     assert.strictEqual(body.query, "long");
+    assert.deepStrictEqual(body.tag_files, ["danbooru.csv"]);
     return {
         ok: true,
         json: async () => ({
             results: [
+                [
+                    "long_low_count",
+                    0,
+                    10,
+                    "",
+                    "",
+                    "tag",
+                    "tag",
+                    "danbooru",
+                    [],
+                    10,
+                ],
                 [
                     "long_hair",
                     0,
@@ -76,10 +97,20 @@ require("../javascript/zzzz_tacjp_fast_search.js");
     const parser = PARSERS[0];
     assert.strictEqual(parser.triggerCondition(), true);
     const results = await parser.parse({selectionStart: 4}, "long");
-    assert.strictEqual(results.length, 1);
-    assert.strictEqual(results[0].text, "long_hair");
-    assert.strictEqual(results[0].translation, "長髪");
+    assert.strictEqual(results.length, 3);
+
+    const highCount = results.find(result => result.text === "long_hair");
+    const lowCount = results.find(result => result.text === "long_low_count");
+    const extra = results.find(result => result.text === "long_quality");
+    assert.ok(highCount);
+    assert.ok(lowCount);
+    assert.ok(extra);
+    assert.strictEqual(highCount.translation, "長髪");
     assert.strictEqual(translations.get("long_hair"), "長髪");
+    assert.strictEqual(extra.type, ResultType.extra);
+    assert.ok(extra.sortKey.startsWith("0:"));
+    assert.ok(highCount.sortKey.startsWith("1:"));
+    assert.ok(highCount.sortKey.localeCompare(lowCount.sortKey) < 0);
 
     // Experimental full-prompt live translation requires the complete local map,
     // so changing to that mode must load the legacy browser dataset automatically.
