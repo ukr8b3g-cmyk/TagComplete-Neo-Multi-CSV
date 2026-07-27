@@ -22,6 +22,26 @@
         installed = true;
 
         const legacyLoadTags = loadTags;
+        const normalizeSearch = value => globalThis.TACJPCore?.normalizeSearch
+            ? globalThis.TACJPCore.normalizeSearch(value)
+            : String(value || "").toLocaleLowerCase().replaceAll("_", " ").trim();
+        const matchScore = (value, query, substringOnly) => globalThis.TACJPCore?.matchScore
+            ? globalThis.TACJPCore.matchScore(value, query, substringOnly)
+            : (() => {
+                const candidate = normalizeSearch(value);
+                const needle = normalizeSearch(query);
+                if (!candidate || !needle) return 99;
+                if (substringOnly) return candidate.includes(needle) ? 30 : 99;
+                if (candidate === needle) return 0;
+                if (candidate.startsWith(needle)) return 10;
+                return candidate.includes(needle) ? 30 : 99;
+            })();
+
+        function stableSortKey(group, score, count, text) {
+            const boundedCount = Math.max(0, Math.min(999999999999, Number(count) || 0));
+            const inverseCount = String(999999999999 - boundedCount).padStart(12, "0");
+            return `${group}:${String(Number(score) || 0).padStart(4, "0")}:${inverseCount}:${normalizeSearch(text)}`;
+        }
 
         function serverSelected() {
             return !remoteDisabledForSession
@@ -47,7 +67,8 @@
         }
 
         // Keep lazy loading, but in server mode do not transfer the complete merged
-        // dataset to the browser. Extra tags stay local for compatibility.
+        // dataset to the browser. The legacy extra-file list stays local because it
+        // has separate Insert before/after semantics in upstream TagComplete.
         loadTags = async function fastLoadTags(config) {
             if (!serverSelected()) return legacyLoadTags(config);
             allTags = [];
@@ -78,6 +99,40 @@
             });
         }
 
+        function appendLocalExtraResults(output, body) {
+            if (!Array.isArray(extras) || extras.length === 0) return output;
+            if (!TAC_CFG?.extra?.extraFile || TAC_CFG.extra.extraFile === "None") return output;
+
+            const existing = new Set(output.map(result => normalizeSearch(result.text)));
+            const group = TAC_CFG.extra.addMode === "Insert before" ? "0" : "2";
+            for (const row of extras) {
+                const text = String(row?.[0] || "").trim();
+                if (!text || existing.has(normalizeSearch(text))) continue;
+                const fields = [text];
+                if (body.search_aliases && row?.[3]) fields.push(...String(row[3]).split(","));
+                if (body.search_translations && row?.[4]) fields.push(String(row[4]));
+                const score = Math.min(...fields.map(value => matchScore(value, body.query, body.substring_only)));
+                if (!Number.isFinite(score) || score >= 99) continue;
+
+                const result = new AutocompleteResult(text, ResultType.extra);
+                result.category = row?.[1] || 0;
+                result.meta = row?.[2] || "Custom tag";
+                result.aliases = String(row?.[3] || "");
+                result.translation = String(row?.[4] || "");
+                result.sourceType = "custom";
+                result.sourceTypes = ["custom"];
+                result.sourceFiles = [TAC_CFG.extra.extraFile];
+                result.insertMode = "tag";
+                result.categoryScheme = "custom";
+                result.matchScore = score;
+                result.sortKey = stableSortKey(group, score, 0, text);
+                if (result.translation) translations.set(text, result.translation);
+                output.push(result);
+                existing.add(normalizeSearch(text));
+            }
+            return output;
+        }
+
         class ServerTagParser extends BaseTagParser {
             constructor() {
                 super(() => {
@@ -101,7 +156,7 @@
                 );
                 if (!body.query || body.tag_files.length === 0) {
                     if (typeof updateTacStatusDot === "function") updateTacStatusDot("ready");
-                    return [];
+                    return appendLocalExtraResults([], body);
                 }
 
                 try {
@@ -134,14 +189,16 @@
                         result.sourceFiles = Array.isArray(row[8]) ? row[8] : [];
                         result.sourceTypes = [result.sourceType];
                         result.matchScore = Number(row[9]) || 0;
-                        // The original parser pipeline applies its normal name sort.
-                        // Prefixing the sort key preserves server relevance when local
-                        // frequency sorting is disabled; frequency sorting still uses
-                        // matchScore as its primary criterion.
-                        result.sortKey = `${String(result.matchScore).padStart(4, "0")}:${text}`;
+                        result.sortKey = stableSortKey(
+                            "1",
+                            result.matchScore,
+                            result.count,
+                            text,
+                        );
                         if (result.translation) translations.set(text, result.translation);
                         output.push(result);
                     }
+                    appendLocalExtraResults(output, body);
                     if (typeof updateTacStatusDot === "function") updateTacStatusDot("ready");
                     if (opts?.["tacjp_searchDebug"]) {
                         console.debug("[TagComplete Neo Multi-CSV] server search", data);
