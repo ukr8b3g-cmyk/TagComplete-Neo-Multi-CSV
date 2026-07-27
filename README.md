@@ -127,12 +127,7 @@ Forge-Neo/
 
 ### 設定画面
 
-次の画像は、日本語表示での主要設定、挿入設定、Animaアーティストタグ、
-Multi-CSV検索設定の順です。
-
-<p align="center">
-  <img src="docs/images/settings-ja.png" alt="TagComplete Neo Multi-CSV 日本語設定画面" width="538">
-</p>
+![タグファイル・翻訳ファイル・プロンプトモードの設定](assets/validation/ja-multicsv-controls.png)
 
 主に変更する項目:
 
@@ -245,6 +240,8 @@ long_hair,長髪
 日本語専用の固定処理ではないため、他言語の翻訳CSVも利用できます。
 
 ### 複数CSVとサーバー検索
+
+![Multi-CSV検索・キャッシュ設定](assets/validation/ja-search-settings.png)
 
 `Tag files`と`Translation files`は複数選択ドロップダウンです。
 
@@ -373,6 +370,8 @@ Danbooruなどのタグ辞書を優先します。SDXL、Illustrious XL、Pony�
 
 ### 挿入形式
 
+![タグの除外・挿入設定](assets/validation/ja-insertion-controls.png)
+
 設定可能な項目:
 
 - アンダースコアを空白へ変換
@@ -401,6 +400,8 @@ long hair, blue eyes, looking at viewer,
 自然言語CSVに`insert_mode`がない場合、単語1個は`word`、複数語は`phrase`として推定します。
 
 ### Animaアーティストタグの`@`付与
+
+![Animaアーティストタグの接頭辞設定](assets/validation/ja-artist-prefix.png)
 
 `アーティストタグに「@」を付ける`は、アーティスト候補を挿入する際の接頭辞を制御します。
 
@@ -628,12 +629,7 @@ Disable other TagComplete forks while testing to avoid duplicate listeners.
 
 ### Settings overview
 
-The following image shows the main settings, insertion controls, Anima artist
-prefix option, and advanced Multi-CSV search controls in English.
-
-<p align="center">
-  <img src="docs/images/settings-en.png" alt="TagComplete Neo Multi-CSV English settings" width="550">
-</p>
+![Tag files, translation files, and prompt-mode settings](assets/validation/en-multicsv-controls.png)
 
 Controls used most often:
 
@@ -726,6 +722,8 @@ Translations are optional and not limited to Japanese.
 
 ### Multiple sources and server search
 
+![Multi-CSV server search and cache settings](assets/validation/en-search-settings.png)
+
 Merge rules:
 
 - A tag is displayed once even if it appears in multiple files.
@@ -804,6 +802,8 @@ Optional suggestion metadata includes:
 
 ### Prompt insertion
 
+![Tag exclusion and insertion settings](assets/validation/en-insertion-controls.png)
+
 The default insertion settings:
 
 - Replace underscores with spaces
@@ -824,6 +824,8 @@ When a natural-language CSV omits `insert_mode`, a single word is inferred as
 `word` and a multi-word value as `phrase`.
 
 ### Anima artist `@` prefix
+
+![Anima artist-prefix settings](assets/validation/en-artist-prefix.png)
 
 `Add '@' to artist tags` controls the prefix used when inserting artist suggestions.
 
