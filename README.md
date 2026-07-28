@@ -93,6 +93,7 @@ Forge NeoとreForgeの両方で実機動作を確認済みです。
 - 大容量CSV向けサーバー検索とv6永続キャッシュ
 - ユーザーが保存したプリセットだけを管理
 - Animaアーティストタグへの`@`付与設定
+- 設定項目の日本語・英語マウスオーバーヘルプ
 
 ### インストール
 
@@ -162,6 +163,8 @@ Forge-Neo-or-reForge/
 - **辞書種別を表示:** `TAG` / `NL` / `CUSTOM`ラベルを任意表示
 - **自然言語候補を識別表示:** 自然言語辞書の候補を見分けやすく表示
 - **更新ボタン:** 対応するファイル一覧だけを再読込
+
+各設定項目へマウスを合わせると、選択中の表示言語に応じた簡単な説明が表示されます。
 
 通常利用では、最初の設定ブロックだけを確認すれば十分です。
 最下部の`Multi-CSV検索設定`は、キャッシュ破損や性能調査時を除き推奨初期値のまま使用してください。
@@ -618,6 +621,7 @@ Key additions:
 - Server-side search with a persistent v6 cache
 - User-only presets without bundled model presets
 - Configurable `@` prefix for Anima artist tags
+- Bilingual hover help for settings
 
 ### Installation
 
@@ -687,6 +691,8 @@ Controls used most often:
 - **Show source labels:** optionally displays `TAG` / `NL` / `CUSTOM`
 - **Mark natural-language suggestions:** visually distinguishes natural-language rows
 - **Refresh buttons:** reload only the corresponding file list
+
+Hover over a setting to see a short explanation in the selected interface language.
 
 Keep the advanced Multi-CSV search controls at their recommended defaults
 unless diagnosing cache or performance problems.
