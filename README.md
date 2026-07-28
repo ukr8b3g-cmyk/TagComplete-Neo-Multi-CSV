@@ -20,6 +20,15 @@ vocabularies, user presets, and safe prompt insertion.
 
 </div>
 
+> [!IMPORTANT]
+> **最新版はGitHubリポジトリからのインストールを推奨します。**<br>
+> Civitaiで配布しているZIPは公開時点のスナップショットであり、最新版より古い場合があります。<br>
+> Forge Neo／reForgeの`Extensions` → `Install from URL`で、次のURLを使用してください。<br>
+> `https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV`
+>
+> **For the latest version, install directly from the GitHub repository.**<br>
+> The ZIP distributed on Civitai is a release snapshot and may be older than the current GitHub version.
+
 > このプロジェクトは `sd-webui-tagcomplete-neo` を基盤としたフォークです。<br>
 > 候補ポップアップ、キーボード操作、カテゴリ色、LoRA・Embedding・Wildcard・Chantなど、
 > TagComplete Neoの操作感を維持しながら、Danbooru Tag JP Assistの辞書管理方式を統合しています。
@@ -188,17 +197,29 @@ CSVはサブフォルダにも配置できます。設定画面には相対パ�
 
 ### 同梱データ
 
-元のTagComplete Neoと同様、用途を比較しやすい表形式で記載します。
+タグCSVと翻訳CSVは別フォルダで管理され、それぞれ複数選択できます。
 
-| ファイル | 出典・種別 | 主な用途 | 初期選択 |
+#### タグCSV
+
+| ファイル | 内容 | 主な用途 | 新規環境の初期選択 |
 |---|---|---|---|
-| `danbooru_2025.csv` | TagComplete Neo / Danbooru 2025 | アニメ・SDXL・Illustrious系 | ✓ |
-| `natural_language_tags.csv` | Multi-CSV追加・自然言語辞書 | 自然言語・ハイブリッド入力 | ✓ |
-| `e621.csv` | TagComplete Neo / e621 | Furry・Anthro系 | — |
-| `anima_artists.csv` | Multi-CSV追加・Animaアーティスト | Animaのアーティスト補完 | — |
-| `anima_characters.csv` | Multi-CSV追加・Animaキャラクター | Animaのキャラクター補完 | — |
-| `merged_translations_dedup.csv` | 統合・重複除去済み翻訳 | Danbooru系タグの日本語検索・表示 | ✓ |
-| `natural_language_ja.csv` | 自然言語翻訳 | 自然言語候補の日本語検索・表示 | ✓ |
+| `danbooru_2025.csv` | Danbooruタグ辞書 | SDXL・Illustrious・Ponyなど | ✓ |
+| `natural_language_tags.csv` | 自然言語辞書 | Hybrid・自然言語入力 | ✓ |
+| `e621.csv` | e621タグ辞書 | Furry・Anthro系 | — |
+| `anima_artists.csv` | Animaアーティスト辞書 | Animaアーティスト補完 | — |
+| `anima_characters.csv` | Animaキャラクター辞書 | Animaキャラクター補完 | — |
+
+#### 翻訳CSV
+
+| ファイル | 内容 | 主な用途 | 新規環境の初期選択 |
+|---|---|---|---|
+| `merged_translations_dedup.csv` | タグ翻訳・別名 | 日本語検索・候補表示 | ✓ |
+| `natural_language_ja.csv` | 自然言語の日本語翻訳 | 日本語での自然言語検索 | ✓ |
+
+> 初期選択は新規インストール時の値です。既存の設定やユーザープリセットは
+> 維持されるため、アップデート後の選択内容とは異なる場合があります。
+> Animaを使用する場合は、必要に応じて`anima_artists.csv`と
+> `anima_characters.csv`を追加選択してください。
 
 `danbooru_2025.csv`と`e621.csv`は
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo)
@@ -699,19 +720,29 @@ unless diagnosing cache or performance problems.
 
 ### Data layout
 
-The extension bundles the following data. `danbooru_2025.csv` and
-`natural_language_tags.csv` are selected by default. e621 and the Anima files
-are bundled but remain optional.
+Tag and translation CSV files are stored separately and support multiple
+selections.
 
-| File | Source / type | Best for | Default |
+#### Tag CSV files
+
+| File | Contents | Best for | New-install default |
 |---|---|---|---|
-| `danbooru_2025.csv` | TagComplete Neo / Danbooru 2025 | Anime, SDXL, Illustrious | ✓ |
-| `natural_language_tags.csv` | Multi-CSV natural-language list | Natural-language and hybrid prompts | ✓ |
-| `e621.csv` | TagComplete Neo / e621 | Furry / anthro models | — |
-| `anima_artists.csv` | Multi-CSV Anima artists | Anima artist completion | — |
-| `anima_characters.csv` | Multi-CSV Anima characters | Anima character completion | — |
-| `merged_translations_dedup.csv` | Merged and deduplicated translations | Japanese tag search and display | ✓ |
-| `natural_language_ja.csv` | Natural-language translations | Japanese natural-language search and display | ✓ |
+| `danbooru_2025.csv` | Danbooru tag dictionary | SDXL, Illustrious, Pony, and similar models | ✓ |
+| `natural_language_tags.csv` | Natural-language dictionary | Hybrid and natural-language input | ✓ |
+| `e621.csv` | e621 tag dictionary | Furry / anthro models | — |
+| `anima_artists.csv` | Anima artist dictionary | Anima artist completion | — |
+| `anima_characters.csv` | Anima character dictionary | Anima character completion | — |
+
+#### Translation CSV files
+
+| File | Contents | Best for | New-install default |
+|---|---|---|---|
+| `merged_translations_dedup.csv` | Tag translations and aliases | Japanese search and suggestion display | ✓ |
+| `natural_language_ja.csv` | Japanese natural-language translations | Japanese natural-language search | ✓ |
+
+> Defaults shown above apply to new installations. Existing settings and user
+> presets are preserved, so selections can differ after an update. For Anima,
+> select `anima_artists.csv` and `anima_characters.csv` as needed.
 
 The two upstream tag lists are taken from
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo).
