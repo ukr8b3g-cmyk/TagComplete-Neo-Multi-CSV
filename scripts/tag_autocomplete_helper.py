@@ -58,6 +58,22 @@ except (ModuleNotFoundError, ImportError):
     )
     from shared_paths import *
 
+
+if not hasattr(gr.Dropdown, "get_component_class_id"):
+    class MultiCSVDropdown(gr.Dropdown):
+        """Keep Multi-CSV refresh compatible with older Gradio Dropdown.update."""
+
+        def get_block_name(self):
+            return "dropdown"
+
+        @staticmethod
+        def update(*args, **kwargs):
+            kwargs.pop("multiselect", None)
+            return gr.Dropdown.update(*args, **kwargs)
+else:
+    MultiCSVDropdown = gr.Dropdown
+
+
 # Migrate older root-level data once, then keep all file types separated.
 migrate_legacy_files(TAGS_PATH)
 JP_DATA = DataStore(TAGS_PATH)
@@ -767,14 +783,14 @@ def on_ui_settings():
         "tacjp_tagFiles": shared.OptionInfo(
             _default_tag_selection(),
             "Tag files (multiple selection)",
-            gr.Dropdown,
+            MultiCSVDropdown,
             lambda: {"choices": tag_files, "multiselect": True},
             refresh=update_tag_files,
         ).info("Files under tags/tag_files. Selection order is source priority."),
         "tacjp_translationFiles": shared.OptionInfo(
             _default_translation_selection(),
             "Translation files (multiple selection)",
-            gr.Dropdown,
+            MultiCSVDropdown,
             lambda: {"choices": translation_files, "multiselect": True},
             refresh=update_tag_files,
         ).info("Optional files under tags/translation_files. Leave empty when translations are not needed."),

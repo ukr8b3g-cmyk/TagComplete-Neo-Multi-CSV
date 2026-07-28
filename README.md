@@ -12,9 +12,9 @@
 Danbooru 2025、e621、自然言語、Anima、ユーザーCSVを、
 モデルや用途に合わせて組み合わせられます。
 
-**Forge Neo向け、複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
+**Forge Neo／reForge向け、複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
 
-A Forge Neo fork of TagComplete Neo with multiple CSV sources,
+A Forge Neo and reForge compatible fork of TagComplete Neo with multiple CSV sources,
 separate translation files, Japanese/translated search, natural-language
 vocabularies, user presets, and safe prompt insertion.
 
@@ -47,10 +47,11 @@ DominikDoom/a1111-sd-webui-tagcomplete
 ### 対応環境
 
 - Stable Diffusion WebUI Forge Neo
+- Stable Diffusion WebUI reForge
 - Gradio 3系・4系で異なる主要DOM構造を考慮
 
-現在、実機で動作確認している環境はForge Neoです。Forge／reForgeは未確認のため、
-対応環境には含めていません。
+Forge NeoとreForgeの両方で実機動作を確認済みです。
+通常のStable Diffusion WebUI Forgeは未確認のため、対応環境には含めていません。
 
 主な用途:
 
@@ -97,21 +98,21 @@ DominikDoom/a1111-sd-webui-tagcomplete
 
 #### Git clone
 
-Forge Neoの`extensions`フォルダーで実行します。
+Forge NeoまたはreForgeの`extensions`フォルダーで実行します。
 
 ```powershell
-cd "＜Forge-Neoのインストール先＞\extensions"
+cd "＜Forge-NeoまたはreForgeのインストール先＞\extensions"
 git clone https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV.git
 ```
 
 #### ZIP
 
 1. GitHubの`Code` → `Download ZIP`からZIPを取得して展開します。
-2. 展開後のフォルダーをForge Neoの`extensions`へ配置し、
+2. 展開後のフォルダーをForge NeoまたはreForgeの`extensions`へ配置し、
    フォルダー名を`TagComplete-Neo-Multi-CSV`にします。
 
 ```text
-Forge-Neo/
+Forge-Neo-or-reForge/
 └─ extensions/
    └─ TagComplete-Neo-Multi-CSV/
       ├─ javascript/
@@ -124,7 +125,7 @@ Forge-Neo/
 
 #### 起動後
 
-1. Forge Neoを起動または再起動します。
+1. Forge NeoまたはreForgeを起動または再起動します。
 2. Generate欄付近の状態ランプがオレンジから緑へ変わるまで待ちます。
 3. `Settings` → `Tag Autocomplete / Multi-CSV`を開きます。
 4. 設定変更後は`Apply settings`を押します。
@@ -607,21 +608,21 @@ Key additions:
 
 #### Git clone
 
-Run the following command from the Forge Neo `extensions` directory:
+Run the following command from the Forge Neo or reForge `extensions` directory:
 
 ```powershell
-cd "<path-to-Forge-Neo>\extensions"
+cd "<path-to-Forge-Neo-or-reForge>\extensions"
 git clone https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV.git
 ```
 
 #### ZIP
 
 1. Select `Code` → `Download ZIP` on GitHub and extract the archive.
-2. Move the extracted folder into the Forge Neo `extensions` directory and
+2. Move the extracted folder into the Forge Neo or reForge `extensions` directory and
    name it `TagComplete-Neo-Multi-CSV`.
 
 ```text
-Forge-Neo/
+Forge-Neo-or-reForge/
 └─ extensions/
    └─ TagComplete-Neo-Multi-CSV/
 ```
@@ -630,7 +631,7 @@ Do not overwrite an existing folder without reviewing its contents first.
 
 #### After installation
 
-1. Start or restart Forge Neo.
+1. Start or restart Forge Neo or reForge.
 2. Wait until the status indicator near Generate changes from orange to green.
 3. Open:
 
@@ -895,15 +896,15 @@ python tools/verify_extension.py
 ```
 
 This validates Python/JavaScript syntax and the WebUI-independent merge, preset,
-and wildcard-protection logic. A real Forge Neo installation is still
+and wildcard-protection logic. A real Forge Neo or reForge installation is still
 required for final UI and integration testing.
 
 ### Compatibility notes
 
-The currently verified runtime is Forge Neo. Forge and reForge have not yet been
-verified and are not listed as supported environments. Runtime compatibility can
-still depend on WebUI changes, other extensions, browser versions, and local model
-directory settings.
+Forge Neo and reForge have both been verified on real installations. Standard
+Stable Diffusion WebUI Forge has not yet been verified and is not listed as a
+supported environment. Runtime compatibility can still depend on WebUI changes,
+other extensions, browser versions, and local model directory settings.
 
 ---
 
