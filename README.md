@@ -96,6 +96,21 @@ Forge NeoとreForgeの両方で実機動作を確認済みです。
 
 ### インストール
 
+#### WebUIからインストール（推奨）
+
+Forge NeoまたはreForgeの`Extensions` → `Install from URL`を開きます。
+
+![Install from URL画面](assets/install-from-url.png)
+
+1. `URL for extension's git repository`へ次のURLを入力します。
+
+   ```text
+   https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV
+   ```
+
+2. `Specific branch name`と`Local directory name`は空欄のままにします。
+3. `Install`を押し、完了後にForge NeoまたはreForgeを再起動します。
+
 #### Git clone
 
 Forge NeoまたはreForgeの`extensions`フォルダーで実行します。
@@ -605,6 +620,21 @@ Key additions:
 - Configurable `@` prefix for Anima artist tags
 
 ### Installation
+
+#### Install from the WebUI (recommended)
+
+Open `Extensions` → `Install from URL` in Forge Neo or reForge.
+
+![Install from URL screen](assets/install-from-url.png)
+
+1. Enter the following address in `URL for extension's git repository`:
+
+   ```text
+   https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV
+   ```
+
+2. Leave `Specific branch name` and `Local directory name` empty.
+3. Select `Install`, then restart Forge Neo or reForge when installation completes.
 
 #### Git clone
 
