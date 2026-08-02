@@ -135,6 +135,31 @@ def test_natural_language_mode_ranking_and_insert_metadata(
     assert first[6] == "phrase"
 
 
+def test_candidate_sort_modes_keep_csv_order_or_rank_relevance(
+    tmp_path: Path,
+) -> None:
+    data = DataStore(tmp_path / "tags")
+    write(
+        data.tag_dir / "order.csv",
+        "tag,category,count\n"
+        "tag_z,0,1\n"
+        "tag_a,0,100\n"
+        "tag_b,0,10\n",
+    )
+    store = FastSearchStore(data)
+    common = dict(
+        query="tag",
+        tag_files=["order.csv"],
+        translation_files=[],
+        prompt_mode="Custom",
+        limit=10,
+    )
+    legacy = store.search(SearchRequest(**common, candidate_sort_mode="Legacy"))
+    relevance = store.search(SearchRequest(**common, candidate_sort_mode="Relevance"))
+    assert [row[0] for row in legacy["results"]] == ["tag_z", "tag_a", "tag_b"]
+    assert [row[0] for row in relevance["results"]] == ["tag_a", "tag_b", "tag_z"]
+
+
 def test_source_metadata_is_optional(tmp_path: Path) -> None:
     store = create_six_file_fixture(tmp_path)
     without_sources = store.search(

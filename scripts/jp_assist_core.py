@@ -685,6 +685,9 @@ class PresetStore:
         mode = _clean(settings.get("prompt_mode")) or "Tag"
         if mode not in VALID_PROMPT_MODES:
             mode = "Tag"
+        candidate_sort_mode = _clean(settings.get("candidate_sort_mode")) or "Legacy"
+        if candidate_sort_mode not in {"Legacy", "Relevance"}:
+            candidate_sort_mode = "Legacy"
         anima_artist_prefix = _clean(settings.get("anima_artist_prefix")) or "Off"
         if anima_artist_prefix not in {"Off", "On", "Auto"}:
             anima_artist_prefix = "Off"
@@ -692,6 +695,7 @@ class PresetStore:
             "tag_files": _string_list(settings.get("tag_files")),
             "translation_files": _string_list(settings.get("translation_files")),
             "prompt_mode": mode,
+            "candidate_sort_mode": candidate_sort_mode,
             "search_translations": _to_bool(settings.get("search_translations"), True),
             "show_translations": _to_bool(settings.get("show_translations"), True),
             "show_source_labels": _to_bool(settings.get("show_source_labels"), False),

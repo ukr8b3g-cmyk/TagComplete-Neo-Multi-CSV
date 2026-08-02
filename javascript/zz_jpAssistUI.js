@@ -5,6 +5,7 @@ const TACJP_OPTION_MAP = {
     tag_files: "tacjp_tagFiles",
     translation_files: "tacjp_translationFiles",
     prompt_mode: "tacjp_promptMode",
+    candidate_sort_mode: "tacjp_candidateSortMode",
     search_translations: "tac_translation.searchByTranslation",
     show_translations: "tacjp_showTranslations",
     show_source_labels: "tacjp_showSourceLabels",
@@ -63,6 +64,7 @@ const TACJP_UI_TEXT = {
         tagFilesLabel: "Tag files (multiple selection)",
         translationFilesLabel: "Translation files (multiple selection)",
         promptModeLabel: "Prompt mode",
+        candidateSortLabel: "Candidate sort mode",
         showTranslationsLabel: "Display translations in suggestions",
         showSourceLabelsLabel: "Show source labels (TAG / NL / CUSTOM)",
         colorNaturalLabel: "Mark natural-language suggestions",
@@ -117,6 +119,7 @@ const TACJP_UI_TEXT = {
         tagFilesLabel: "タグファイル（複数選択）",
         translationFilesLabel: "翻訳ファイル（複数選択）",
         promptModeLabel: "プロンプトモード",
+        candidateSortLabel: "候補の並び順",
         showTranslationsLabel: "候補に翻訳を表示",
         showSourceLabelsLabel: "辞書種別を表示（TAG / NL / CUSTOM）",
         colorNaturalLabel: "自然言語候補を識別表示",
@@ -136,6 +139,7 @@ const TACJP_UI_TEXT = {
 
 const TACJP_CORE_LABELS = {
     tacjp_promptMode: ["Prompt mode", "プロンプトモード"],
+    tacjp_candidateSortMode: ["Candidate sort mode", "候補の並び順"],
     tac_animaArtistPrefix: ["Add '@' to artist tags", "アーティストタグに「@」を付ける"],
     tac_active: ["Enable Tag Autocompletion", "タグ自動補完を有効化"],
     "tac_activeIn.txt2img": ["Active in txt2img", "txt2imgで有効"],
@@ -191,6 +195,25 @@ const TACJP_CORE_LABELS = {
     tac_chantFile: ["Chant filename", "Chantファイル"],
     tac_keymap: ["Configure hotkeys (JSON)", "ホットキー設定（JSON）"],
     tac_colormap: ["Configure suggestion colors (JSON)", "候補色設定（JSON）"],
+};
+
+const TACJP_SELECT_LABELS = {
+    tacjp_promptMode: {
+        normalize: tacJpPromptMode,
+        values: {
+            Tag: ["Tag priority", "タグ優先"],
+            Hybrid: ["Auto (Hybrid)", "自動判定（Hybrid）"],
+            "Natural Language": ["Natural language priority", "自然言語優先"],
+            Custom: ["Equal priority", "同等（優先なし）"],
+        },
+    },
+    tacjp_candidateSortMode: {
+        normalize: tacJpCandidateSortMode,
+        values: {
+            Legacy: ["TagComplete Neo compatible (CSV order)", "Neo互換（CSV順）"],
+            Relevance: ["Relevance first", "関連度優先"],
+        },
+    },
 };
 
 const TACJP_INFO_LABELS = [
@@ -337,6 +360,20 @@ async function tacJpSyncSettingsUi(settings) {
     if (promptInput && tacJpPromptMode(promptInput.value) !== settings.prompt_mode) {
         await tacJpChooseGradioOption("tacjp_promptMode", promptLabels[settings.prompt_mode] || settings.prompt_mode);
     }
+    const candidateSortLabels = {
+        Legacy: "TagComplete Neo compatible (CSV order)",
+        Relevance: "Relevance first",
+    };
+    const candidateSortInput = gradioApp().querySelector("#setting_tacjp_candidateSortMode input");
+    if (
+        candidateSortInput
+        && tacJpCandidateSortMode(candidateSortInput.value) !== settings.candidate_sort_mode
+    ) {
+        await tacJpChooseGradioOption(
+            "tacjp_candidateSortMode",
+            candidateSortLabels[settings.candidate_sort_mode] || candidateSortLabels.Legacy,
+        );
+    }
     const prefixInput = gradioApp().querySelector("#setting_tac_animaArtistPrefix input");
     if (prefixInput && tacJpArtistPrefix(prefixInput.value) !== settings.anima_artist_prefix) {
         await tacJpChooseGradioOption("tac_animaArtistPrefix", prefixLabels[settings.anima_artist_prefix] || prefixLabels.Off);
@@ -383,11 +420,49 @@ function tacJpPromptMode(value) {
     return modes[value] || value || "Tag";
 }
 
+function tacJpCandidateSortMode(value) {
+    const modes = {
+        "TagComplete Neo compatible (CSV order)": "Legacy",
+        "Neo互換（CSV順）": "Legacy",
+        "Relevance first": "Relevance",
+        "関連度優先": "Relevance",
+    };
+    return modes[value] || value || "Legacy";
+}
+
 function tacJpArtistPrefix(value) {
     const text = String(value || "");
     if (text.startsWith("On") || text.startsWith("常時")) return "On";
     if (text.startsWith("Auto") || text.startsWith("自動")) return "Auto";
     return "Off";
+}
+
+function tacJpLocalizeSelect(option) {
+    const definition = TACJP_SELECT_LABELS[option];
+    const root = gradioApp().querySelector(`#${CSS.escape(`setting_${option}`)}`);
+    if (!definition || !root) return;
+    const languageIndex = tacJpLanguage() === "ja" ? 1 : 0;
+    const textFor = value => definition.values[definition.normalize(value)]?.[languageIndex];
+    const localize = () => {
+        const input = root.querySelector("input");
+        const inputText = input && textFor(input.value);
+        if (input && inputText && input.value !== inputText) {
+            input.value = inputText;
+            input.setAttribute("value", inputText);
+        }
+        document.querySelectorAll("[role='option']").forEach(node => {
+            const text = textFor(node.textContent.trim());
+            if (text && node.textContent.trim() !== text) node.textContent = text;
+        });
+    };
+    localize();
+    if (!root.dataset.tacjpSelectLocalized) {
+        root.dataset.tacjpSelectLocalized = "true";
+        root.addEventListener("pointerdown", () => {
+            requestAnimationFrame(localize);
+            setTimeout(localize, 0);
+        }, true);
+    }
 }
 
 function tacJpCurrentSettings() {
@@ -396,6 +471,7 @@ function tacJpCurrentSettings() {
         tag_files: tacJpLiveTokens("tacjp_tagFiles", cfg.tagFiles || opts["tacjp_tagFiles"] || []),
         translation_files: tacJpLiveTokens("tacjp_translationFiles", cfg.translation?.translationFiles || opts["tacjp_translationFiles"] || []),
         prompt_mode: tacJpPromptMode(tacJpLiveValue("tacjp_promptMode", cfg.promptMode || opts["tacjp_promptMode"] || "Tag")),
+        candidate_sort_mode: tacJpCandidateSortMode(tacJpLiveValue("tacjp_candidateSortMode", cfg.candidateSortMode || opts["tacjp_candidateSortMode"] || "Legacy")),
         search_translations: tacJpLiveChecked("tac_translation.searchByTranslation", cfg.translation?.searchByTranslation ?? opts["tac_translation.searchByTranslation"] ?? true),
         show_translations: tacJpLiveChecked("tacjp_showTranslations", cfg.showTranslations ?? opts["tacjp_showTranslations"] ?? true),
         show_source_labels: tacJpLiveChecked("tacjp_showSourceLabels", cfg.showSourceLabels ?? opts["tacjp_showSourceLabels"] ?? false),
@@ -527,6 +603,7 @@ function tacJpDecorateAddedSettings() {
         ["tacjp_tagFiles", "tagFilesLabel"],
         ["tacjp_translationFiles", "translationFilesLabel"],
         ["tacjp_promptMode", "promptModeLabel"],
+        ["tacjp_candidateSortMode", "candidateSortLabel"],
         ["tacjp_showTranslations", "showTranslationsLabel"],
         ["tacjp_showSourceLabels", "showSourceLabelsLabel"],
         ["tacjp_colorNaturalLanguage", "colorNaturalLabel"],
@@ -546,6 +623,7 @@ function tacJpDecorateAddedSettings() {
             label.appendChild(badge);
         }
     });
+    Object.keys(TACJP_SELECT_LABELS).forEach(tacJpLocalizeSelect);
 
     [
         "tacjp_searchEngine",

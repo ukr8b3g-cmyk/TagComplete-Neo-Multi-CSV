@@ -41,6 +41,7 @@ class FastSearchBody(BaseModel):
     tag_files: list[str] = Field(default_factory=list, max_items=64)
     translation_files: list[str] = Field(default_factory=list, max_items=64)
     prompt_mode: str = "Tag"
+    candidate_sort_mode: str = "Legacy"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True
@@ -144,6 +145,7 @@ def api_fast_search(_: gr.Blocks, app: FastAPI):
                 tag_files=body.tag_files,
                 translation_files=body.translation_files,
                 prompt_mode=body.prompt_mode,
+                candidate_sort_mode=body.candidate_sort_mode,
                 context_natural=body.context_natural,
                 search_aliases=body.search_aliases,
                 search_translations=body.search_translations,

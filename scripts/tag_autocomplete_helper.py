@@ -589,7 +589,7 @@ def update_json_files(*args, **kwargs):
 def _default_tag_selection():
     names = [item.name for item in JP_DATA.list_tag_files()]
     preferred = [
-        name for name in ("danbooru_2025.csv", "natural_language_tags.csv")
+        name for name in ("tags_merged_dedup.csv", "natural_language_tags.csv")
         if name in names
     ]
     if preferred:
@@ -803,6 +803,13 @@ def on_ui_settings():
                 ("Equal priority", "Custom"),
             ]},
         ),
+        "tacjp_candidateSortMode": shared.OptionInfo(
+            "Legacy", "Candidate sort mode", gr.Dropdown,
+            lambda: {"choices": [
+                ("TagComplete Neo compatible (CSV order)", "Legacy"),
+                ("Relevance first", "Relevance"),
+            ]},
+        ).info("Controls tag candidate order. Prompt mode still controls tag versus natural-language priority."),
         "tacjp_uiLanguage": shared.OptionInfo(
             "Auto", "Multi-CSV UI language", gr.Dropdown,
             lambda: {"choices": ["Auto", "English", "Japanese"], "visible": False},
@@ -1048,6 +1055,7 @@ PRESET_OPTION_MAP = {
     "tag_files": "tacjp_tagFiles",
     "translation_files": "tacjp_translationFiles",
     "prompt_mode": "tacjp_promptMode",
+    "candidate_sort_mode": "tacjp_candidateSortMode",
     "search_translations": "tac_translation.searchByTranslation",
     "show_translations": "tacjp_showTranslations",
     "show_source_labels": "tacjp_showSourceLabels",

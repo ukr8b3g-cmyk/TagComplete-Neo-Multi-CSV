@@ -137,6 +137,13 @@ def test_anima_artist_prefix_preset_validation(tmp_path: Path) -> None:
     assert presets.validate_settings({"anima_artist_prefix": "invalid"})["anima_artist_prefix"] == "Off"
 
 
+def test_candidate_sort_mode_preset_validation_defaults_to_legacy(tmp_path: Path) -> None:
+    presets = PresetStore(DataStore(tmp_path / "tags"))
+    assert presets.validate_settings({})["candidate_sort_mode"] == "Legacy"
+    assert presets.validate_settings({"candidate_sort_mode": "Relevance"})["candidate_sort_mode"] == "Relevance"
+    assert presets.validate_settings({"candidate_sort_mode": "invalid"})["candidate_sort_mode"] == "Legacy"
+
+
 class FakeResponse:
     def __init__(self, data=b"", headers=None):
         self.data = data

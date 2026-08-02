@@ -203,7 +203,12 @@ class FastSearchQueryMixin:
             request.substring_only,
         )
 
-        scored: list[tuple[int, int, str, int]] = []
+        candidate_sort_mode = (
+            request.candidate_sort_mode
+            if request.candidate_sort_mode in {"Legacy", "Relevance"}
+            else "Legacy"
+        )
+        scored: list[tuple[tuple[Any, ...], int, int]] = []
         seen_ids: set[int] = set()
 
         def consider(row_id: int) -> None:
@@ -242,16 +247,27 @@ class FastSearchQueryMixin:
             if best >= 99:
                 return
             row = rows[row_id]
-            score = best + self._source_penalty(
+            source_penalty = self._source_penalty(
                 request.prompt_mode,
                 int(row[5]),
                 request.context_natural,
             )
-            scored.append(
-                (
+            score = best + source_penalty
+            if candidate_sort_mode == "Legacy":
+                # Keep the selected CSV order and the original order within
+                # each file. Prompt mode only partitions source types first.
+                sort_key: tuple[Any, ...] = (source_penalty, row_id)
+            else:
+                sort_key = (
                     score,
                     -int(row[2] or 0),
                     str(row[0]).casefold(),
+                    row_id,
+                )
+            scored.append(
+                (
+                    sort_key,
+                    score,
                     row_id,
                 )
             )
@@ -285,14 +301,14 @@ class FastSearchQueryMixin:
                 consider(row_id)
 
         if len(scored) > limit:
-            selected = heapq.nsmallest(limit, scored)
+            selected = heapq.nsmallest(limit, scored, key=lambda item: item[0])
         else:
-            scored.sort()
+            scored.sort(key=lambda item: item[0])
             selected = scored
 
         output: list[list[Any]] = []
         source_names: tuple[str, ...] = index["source_names"]
-        for score, _negative_count, _name, row_id in selected:
+        for _sort_key, score, row_id in selected:
             row = rows[row_id]
             item: list[Any] = [
                 row[0],

@@ -337,6 +337,7 @@ async function syncOptions() {
         tagFiles,
         tagFile: tagFiles[0] || "None", // compatibility for original extension code
         promptMode: opts["tacjp_promptMode"] || "Tag",
+        candidateSortMode: opts["tacjp_candidateSortMode"] || "Legacy",
         uiLanguage: opts["tacjp_uiLanguage"] || "Auto",
         showTranslations: opts["tacjp_showTranslations"] !== false,
         showSourceLabels: !!opts["tacjp_showSourceLabels"],
@@ -1615,11 +1616,20 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
         }
 
         const scoreCandidates = candidates => candidates
-            .map(row => ({row, score: scoreRow(row)}))
+            .map(row => ({
+                row,
+                sourcePenalty: sourcePenalty(row),
+                score: scoreRow(row),
+            }))
             .filter(item => item.score < 99);
         let scored = scoreCandidates(tagsToSearch);
         if (scored.length === 0 && tagsToSearch !== allTags) scored = scoreCandidates(allTags);
         scored.sort((a, b) => {
+            if (TAC_CFG.candidateSortMode === "Legacy") {
+                // Modern JavaScript sorts are stable, so equal source priority
+                // retains the merged CSV registration order.
+                return a.sourcePenalty - b.sourcePenalty;
+            }
             const scoreDifference = a.score - b.score;
             if (scoreDifference !== 0) return scoreDifference;
             const countDifference = (Number(b.row[2]) || 0) - (Number(a.row[2]) || 0);
@@ -1714,6 +1724,9 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
         });
         // Actual sorting with the pre-calculated weights
         results = results.sort((a, b) => {
+            if (TAC_CFG.candidateSortMode === "Legacy") {
+                return resultBiasMap.get(b) - resultBiasMap.get(a);
+            }
             const matchDifference = (a.matchScore || 0) - (b.matchScore || 0);
             if (matchDifference !== 0) return matchDifference;
             return resultBiasMap.get(b) - resultBiasMap.get(a);

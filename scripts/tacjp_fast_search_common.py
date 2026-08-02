@@ -299,6 +299,7 @@ class SearchRequest:
     tag_files: Sequence[str]
     translation_files: Sequence[str] = ()
     prompt_mode: str = "Tag"
+    candidate_sort_mode: str = "Legacy"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True

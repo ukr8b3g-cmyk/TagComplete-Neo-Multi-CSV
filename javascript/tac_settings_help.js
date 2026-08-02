@@ -2,6 +2,10 @@
     "use strict";
 
     const TAC_SETTING_HELP = {
+        tacjp_candidateSortMode: {
+            ja: "候補の並び順を選びます。Neo互換は選択したCSVと各CSV内の登録順を基本にし、関連度優先は一致度・件数・名前で並べます。プロンプトモードのタグ／自然言語優先とは別の設定です。",
+            en: "Chooses how tag candidates are ordered. Neo compatible preserves selected CSV order and each CSV's entry order; Relevance first uses match quality, count, and name. This is separate from prompt mode's tag versus natural-language priority.",
+        },
         tacjp_showTranslations: {
             ja: "候補リストに翻訳を併記します。日本語で検索したい場合や、英語タグの意味を確認したい場合に有効です。",
             en: "Shows translations next to candidate tags. Useful for searching in Japanese or checking the meaning of English tags.",

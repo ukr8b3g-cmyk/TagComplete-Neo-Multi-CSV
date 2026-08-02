@@ -17,6 +17,7 @@ const request = core.makeRequest(
         },
         alias: {searchByAlias: true},
         promptMode: "Hybrid",
+        candidateSortMode: "Relevance",
         showSourceLabels: false,
         extra: {extraFile: "extra-quality-tags.csv"},
     },
@@ -28,6 +29,7 @@ const request = core.makeRequest(
 assert.strictEqual(request.query, "髪");
 assert.strictEqual(request.substring_only, true);
 assert.strictEqual(request.limit, 300);
+assert.strictEqual(request.candidate_sort_mode, "Relevance");
 assert.deepStrictEqual(
     request.tag_files,
     ["danbooru.csv", "natural.csv"],

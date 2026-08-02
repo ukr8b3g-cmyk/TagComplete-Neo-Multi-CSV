@@ -390,12 +390,14 @@
                         result.sourceFiles = Array.isArray(row[8]) ? row[8] : [];
                         result.sourceTypes = [result.sourceType];
                         result.matchScore = Number(row[9]) || 0;
-                        result.sortKey = stableSortKey(
-                            "1",
-                            result.matchScore,
-                            result.count,
-                            text,
-                        );
+                        result.sortKey = TAC_CFG.candidateSortMode === "Legacy"
+                            ? `1:legacy:${String(output.length).padStart(8, "0")}`
+                            : stableSortKey(
+                                "1",
+                                result.matchScore,
+                                result.count,
+                                text,
+                            );
                         if (result.translation) translations.set(text, result.translation);
                         output.push(result);
                     }

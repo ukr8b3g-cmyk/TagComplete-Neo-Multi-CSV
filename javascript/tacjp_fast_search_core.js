@@ -43,6 +43,7 @@
             tag_files: optionList(config?.tagFiles),
             translation_files: optionList(config?.translation?.translationFiles),
             prompt_mode: config?.promptMode || "Tag",
+            candidate_sort_mode: config?.candidateSortMode || "Legacy",
             context_natural: contextLooksNatural(prompt, cursor),
             search_aliases: config?.alias?.searchByAlias !== false,
             search_translations: config?.translation?.searchByTranslation !== false,
