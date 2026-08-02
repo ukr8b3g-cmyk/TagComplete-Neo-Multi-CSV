@@ -99,7 +99,8 @@ Forge NeoとreForgeの両方で実機動作を確認済みです。
 - 日本語・翻訳表示のON/OFF
 - `Tag` / `Hybrid` / `Natural Language` / `Custom`モード
 - アンダースコア保護パターンのワイルドカード指定
-- 大容量CSV向けサーバー検索とv6永続キャッシュ
+- 大容量CSV向けサーバー検索とv8永続キャッシュ
+- 投稿数優先の候補並び替え（`count=0`も有効値として表示）
 - ユーザーが保存したプリセットだけを管理
 - Animaアーティストタグへの`@`付与設定
 - 設定項目の日本語・英語マウスオーバーヘルプ
@@ -203,8 +204,9 @@ CSVはサブフォルダにも配置できます。設定画面には相対パ�
 
 | ファイル | 内容 | 主な用途 | 新規環境の初期選択 |
 |---|---|---|---|
-| `danbooru_2025.csv` | Danbooruタグ辞書 | SDXL・Illustrious・Ponyなど | ✓ |
+| `tags_merged_dedup.csv` | 重複除去済みDanbooru / e621統合辞書 | 汎用タグ補完（推奨） | ✓ |
 | `natural_language_tags.csv` | 自然言語辞書 | Hybrid・自然言語入力 | ✓ |
+| `danbooru_2025.csv` | Danbooruタグ辞書 | Danbooruのみを使う構成 | — |
 | `e621.csv` | e621タグ辞書 | Furry・Anthro系 | — |
 | `anima_artists.csv` | Animaアーティスト辞書 | Animaアーティスト補完 | — |
 | `anima_characters.csv` | Animaキャラクター辞書 | Animaキャラクター補完 | — |
@@ -223,16 +225,14 @@ CSVはサブフォルダにも配置できます。設定画面には相対パ�
 
 `danbooru_2025.csv`と`e621.csv`は
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo)
-から収録しています。複数CSVを選択できるため、事前に統合された
-`danbooru_e621_merged.csv`は同梱しません。
+由来の個別辞書です。既定の`tags_merged_dedup.csv`は、それらを重複除去して
+統合した辞書です。
 
 > [!IMPORTANT]
-> **`danbooru_2025.csv`と`e621.csv`の同時選択は対応済みです。**
-> ただし、この2ファイルと`danbooru_e621_merged.csv`のようなマージ済みCSVを
-> 同時に選択することは推奨しません。同一タグは1候補へ統合されるため検索が
-> 壊れるわけではありませんが、重複データによってインデックス構築時間と
-> メモリ使用量が増え、カテゴリ・件数・ソース優先順位も分かりにくくなります。
-> **個別CSVの組み合わせか、マージ済みCSVのどちらか一方を使用してください。**
+> **`tags_merged_dedup.csv`は、`danbooru_2025.csv`や`e621.csv`と同時に選択しないでください。**
+> 重複データによりインデックス構築時間とメモリ使用量が増え、カテゴリ・件数・
+> ソース優先順位も分かりにくくなります。統合辞書か個別CSVの組み合わせの、
+> どちらか一方を使用してください。
 
 ### タグCSV
 
@@ -305,7 +305,7 @@ long_hair,長髪
 
 ```text
 Tag files:
-- danbooru_2025.csv
+- tags_merged_dedup.csv
 - natural_language_tags.csv
 - e621.csv
 - my_custom_tags.csv
@@ -329,18 +329,25 @@ Translation files:
 推奨の`Server index`では、統合済み全データをブラウザへ送らず、
 Python側に保持して現在の検索に必要な候補だけを返します。
 
-- 最初の検索で、選択中CSV構成のv6検索インデックスを構築
+- 起動後のアイドル時間に、選択中CSV構成のv8検索インデックスを構築または復元
 - 同じセッションではメモリキャッシュを利用
 - Forge Neo再起動後はディスクキャッシュから復元
 - 選択CSVのファイル名・サイズ・更新日時が変わると自動再構築
-- キャッシュは`tags/cache/fast-search-v6/`へ保存
-- ブラウザへ返す候補数は`Server search candidate pool`で制限
+- キャッシュは`tags/cache/fast-search-v8/`へ保存
+- ブラウザへ返す候補数は`Server search candidate pool`で制限（同投稿数の使用頻度調整は返却範囲内で行う）
 
 大きなCSVを増やすほど、初回構築時間とPython側のメモリ使用量は増えます。
 一方、Server indexではブラウザへ全CSVを転送しないため、クライアント負荷は候補プール内に抑えられます。
 通常は用途に必要な辞書だけを選択してください。
 
 性能設計と実機計測の詳細は[PERFORMANCE.md](PERFORMANCE.md)を参照してください。
+
+### 候補の並び順
+
+新規インストール時の`Candidate sort mode`は`投稿数優先`です。通常タグでは、
+ソース優先順位の後に投稿数を降順で並べ、同じ投稿数では一致度、CSV順で決定します。
+`count=0`は有効な投稿数として表示・並び替えの対象になります。自然言語・Custom候補は
+投稿数順の対象外で、一致度順です。
 
 ### プロンプトモード
 
@@ -601,9 +608,10 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 `Underscore replacement exclusion patterns`へ完全名またはパターンを追加してください。
 
-#### 最初の検索だけ時間がかかる
+#### 起動直後または最初の検索だけ時間がかかる
 
-初回は選択中CSVのインデックス構築、または再起動後のディスクキャッシュ復元が発生します。
+起動後のアイドル時間に選択中CSVのインデックス構築、または再起動後の
+ディスクキャッシュ復元が発生します。入力が早い場合は最初の検索が同じ処理へ合流します。
 同じセッションの2回目以降はメモリキャッシュを利用します。
 継続的に遅い場合だけ`Log Multi-CSV search timings`を有効にして確認してください。
 
@@ -639,7 +647,8 @@ Key additions:
 - Optional translated search and translated display
 - Natural-language dictionaries and Tag / Hybrid / Natural Language modes
 - Glob-style underscore exclusion patterns
-- Server-side search with a persistent v6 cache
+- Server-side search with a persistent v8 cache
+- Count-first candidate ordering, including visible `count=0` values
 - User-only presets without bundled model presets
 - Configurable `@` prefix for Anima artist tags
 - Bilingual hover help for settings
@@ -727,8 +736,9 @@ selections.
 
 | File | Contents | Best for | New-install default |
 |---|---|---|---|
-| `danbooru_2025.csv` | Danbooru tag dictionary | SDXL, Illustrious, Pony, and similar models | ✓ |
+| `tags_merged_dedup.csv` | Deduplicated Danbooru / e621 merged dictionary | General tag completion (recommended) | ✓ |
 | `natural_language_tags.csv` | Natural-language dictionary | Hybrid and natural-language input | ✓ |
+| `danbooru_2025.csv` | Danbooru tag dictionary | Danbooru-only setups | — |
 | `e621.csv` | e621 tag dictionary | Furry / anthro models | — |
 | `anima_artists.csv` | Anima artist dictionary | Anima artist completion | — |
 | `anima_characters.csv` | Anima character dictionary | Anima character completion | — |
@@ -744,19 +754,15 @@ selections.
 > presets are preserved, so selections can differ after an update. For Anima,
 > select `anima_artists.csv` and `anima_characters.csv` as needed.
 
-The two upstream tag lists are taken from
+`danbooru_2025.csv` and `e621.csv` are individual dictionaries derived from
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo).
-The pre-merged Danbooru/e621 list is intentionally not bundled because this
-fork can select and merge multiple sources at runtime.
+The default `tags_merged_dedup.csv` combines those sources after deduplication.
 
 > [!IMPORTANT]
-> **Selecting `danbooru_2025.csv` and `e621.csv` together is supported.**
-> However, do not also select a pre-merged file such as
-> `danbooru_e621_merged.csv`. Exact duplicates are consolidated, so this does
-> not normally break search, but the redundant data increases index build time
-> and memory usage and makes category, count, and source-priority resolution
-> harder to understand. **Use either the separate source files or a pre-merged
-> file, not both.**
+> **Do not select `tags_merged_dedup.csv` together with `danbooru_2025.csv`
+> or `e621.csv`.** Redundant data increases index build time and memory use and
+> makes category, count, and source-priority resolution harder to understand.
+> Use either the merged dictionary or the separate source files.
 
 ```text
 tags/
@@ -829,16 +835,24 @@ Merge rules:
 With the recommended `Server index`, the complete merged dataset remains on
 the Python side and the browser receives only a bounded candidate pool.
 
-- The first search builds a v6 index for the selected CSV combination.
+- Idle time after startup builds or restores a v8 index for the selected CSV combination.
 - Later searches in the same session use the memory cache.
 - After a Forge Neo restart, the index is restored from disk.
 - File name, size, or modification-time changes automatically invalidate the cache.
-- Compiled data is stored under `tags/cache/fast-search-v6/`.
-- `Server search candidate pool` controls how many candidates are returned before local frequency sorting.
+- Compiled data is stored under `tags/cache/fast-search-v8/`.
+- `Server search candidate pool` controls how many candidates are returned before client-side final ordering; usage-based tie-breaking is limited to that returned pool.
 
 Selecting more large files increases initial build time and Python memory use,
 but it does not require transferring the full merged dataset to the browser.
 See [PERFORMANCE.md](PERFORMANCE.md) for architecture and measured reference results.
+
+### Candidate ordering
+
+New installations use `Count first` as the candidate sort mode. For normal tag
+candidates, source priority is followed by descending post count, then match
+quality and CSV order. `count=0` is a valid post count and is displayed.
+Natural-language and custom candidates remain ranked by match quality rather
+than post count.
 
 ### Prompt modes
 

@@ -1109,8 +1109,17 @@ function addResultsToList(textArea, results, tagword, resetList, timingSequence 
         }
 
         // Post count
-        if (result.count && !isNaN(result.count) && result.count !== Number.MAX_SAFE_INTEGER) {
-            let postCount = result.count;
+        const parsedPostCount = Number(result.count);
+        const hasPostCount = (
+            result.count !== null
+            && result.count !== undefined
+            && result.count !== ""
+            && Number.isFinite(parsedPostCount)
+            && parsedPostCount >= 0
+            && parsedPostCount !== Number.MAX_SAFE_INTEGER
+        );
+        if (hasPostCount) {
+            let postCount = parsedPostCount;
             let formatter;
 
             // Danbooru formats numbers with a padded fraction for 1M or 1k, but not for 10/100k

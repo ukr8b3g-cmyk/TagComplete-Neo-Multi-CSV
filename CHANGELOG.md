@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Made `Count first` the default candidate sort mode and display valid `count=0` values.
+- Added v8 compiled indexes with ASCII trigram and count-ranked lookup paths.
+- Warm the selected Server index after startup and retain single-flight construction.
+- Preserve a trailing underscore in tag searches, so `v_` does not match `very_...`.
+- Changed new-install tag defaults to `tags_merged_dedup.csv` plus `natural_language_tags.csv`.
 - Added a persistent server-side search engine for large Multi-CSV configurations.
 - Replaced the full merged JSON transfer with small per-query candidate responses.
 - Added per-file parsed caches and compiled combination caches that survive WebUI restarts.

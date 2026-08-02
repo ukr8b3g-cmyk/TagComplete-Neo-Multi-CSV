@@ -28,9 +28,9 @@
 - デバウンス25msはAbort増加に対して改善が小さいため不採用
 - デバウンス50msを維持し、Forge Neo全体のメインスレッド遅延と分離したこと
 
-初回インデックス構築は約10.24秒でしたが、CSV構成が変わらない限り
-ディスクキャッシュを再利用します。起動直後に全CSVを読み込むプリロードは
-追加せず、初回検索時の遅延だけを許容する設計としました。
+このv6測定は当時の記録です。現在のv8では、起動後のアイドル時間に選択CSV構成を
+ウォームアップし、最初の入力前に構築または復元を完了させます。v8ではASCII trigram
+インデックスと投稿数順インデックスも追加され、Count優先の検索順位を保ちます。
 
 判定:
 
@@ -97,7 +97,7 @@ LoRA、LyCORIS、Embedding、Wildcard、YAML Wildcard、UMI、Chantなどの既�
 ### Test record
 
 The Forge Neo test used `danbooru_2025.csv`, `natural_language_tags.csv`, and
-two translation CSV files. The v6 contiguous-array cache reduced measured disk
+two translation CSV files. The historical v6 contiguous-array cache reduced measured disk
 restore time from 873.55 ms to 380.54 ms (56.4%) and the first post-restart UI
 result from 1.052 s to 609 ms. A memory-cached request measured 9.03 ms at the
 API and 176.4 ms end to end in the UI. These are reference measurements from
@@ -120,6 +120,9 @@ Use the following values under `Settings` → `Tag Autocomplete / Multi-CSV`:
 - **Compiled search configurations kept on disk:** `8`
 - **Log Multi-CSV search timings:** normally disabled
 
-The server index preserves lazy loading. It compiles the selected CSV combination on the first normal tag query, keeps the complete index on the server, and returns only a limited candidate pool to the browser. Compiled indexes are reused across WebUI restarts and invalidated when a selected file changes.
+The current v8 server index warms up the selected CSV combination during idle
+time after startup, keeps the complete index on the server, and returns only a
+limited candidate pool to the browser. Compiled indexes are reused across WebUI
+restarts and invalidated when a selected file changes.
 
 Use `Legacy browser index — compatibility` when diagnosing compatibility issues or when the experimental full-prompt live translation feature is required. Existing LoRA, Embedding, Wildcard and Chant providers continue to use their original client-side paths.
