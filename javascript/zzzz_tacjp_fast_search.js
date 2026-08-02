@@ -224,14 +224,20 @@
         installed = true;
 
         const legacyLoadTags = loadTags;
-        const normalizeSearch = value => globalThis.TACJPCore?.normalizeSearch
-            ? globalThis.TACJPCore.normalizeSearch(value)
-            : String(value || "").toLocaleLowerCase().replaceAll("_", " ").trim();
+        const normalizeSearch = (value, preserveTrailingSeparator = false) => globalThis.TACJPCore?.normalizeSearch
+            ? globalThis.TACJPCore.normalizeSearch(value, preserveTrailingSeparator)
+            : (() => {
+                const raw = String(value || "").toLocaleLowerCase();
+                const normalized = raw.replaceAll("_", " ").trim();
+                return preserveTrailingSeparator && raw.endsWith("_") && normalized
+                    ? `${normalized} `
+                    : normalized;
+            })();
         const matchScore = (value, query, substringOnly) => globalThis.TACJPCore?.matchScore
             ? globalThis.TACJPCore.matchScore(value, query, substringOnly)
             : (() => {
                 const candidate = normalizeSearch(value);
-                const needle = normalizeSearch(query);
+                const needle = normalizeSearch(query, true);
                 if (!candidate || !needle) return 99;
                 if (substringOnly) return candidate.includes(needle) ? 30 : 99;
                 if (candidate === needle) return 0;

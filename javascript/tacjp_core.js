@@ -73,18 +73,21 @@
         });
     }
 
-    function normalizeSearch(value) {
-        return String(value || "")
+    function normalizeSearch(value, preserveTrailingSeparator = false) {
+        const raw = String(value || "")
             .normalize("NFKC")
-            .toLocaleLowerCase()
+            .toLocaleLowerCase();
+        const hasTrailingSeparator = preserveTrailingSeparator && raw.endsWith("_");
+        const normalized = raw
             .replaceAll("_", " ")
             .replace(/\s+/g, " ")
             .trim();
+        return hasTrailingSeparator && normalized ? `${normalized} ` : normalized;
     }
 
     function matchScore(value, query, substringOnly = false) {
         const candidate = normalizeSearch(value);
-        const needle = normalizeSearch(query);
+        const needle = normalizeSearch(query, true);
         if (!candidate || !needle) return 99;
         if (substringOnly) return candidate.includes(needle) ? 30 : 99;
         if (candidate === needle) return 0;

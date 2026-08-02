@@ -244,7 +244,10 @@ class FastSearchQueryMixin:
 
     def search(self, request: SearchRequest) -> dict[str, Any]:
         started = time.perf_counter()
-        query = normalize_search(request.query)
+        query = normalize_search(
+            request.query,
+            preserve_trailing_separator=True,
+        )
         limit = max(
             1,
             min(

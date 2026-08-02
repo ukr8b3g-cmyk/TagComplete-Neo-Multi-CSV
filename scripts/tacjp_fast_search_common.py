@@ -208,12 +208,19 @@ def _to_category(value: Any) -> int | None:
         return None
 
 
-def normalize_search(value: Any) -> str:
-    """Normalise search text while keeping output text untouched."""
+def normalize_search(
+    value: Any,
+    preserve_trailing_separator: bool = False,
+) -> str:
+    """Normalise search text while optionally keeping a final underscore."""
 
     text = unicodedata.normalize("NFKC", _clean(value)).casefold()
+    trailing_separator = (
+        preserve_trailing_separator and text.endswith("_")
+    )
     text = text.replace("_", " ")
-    return re.sub(r"\s+", " ", text).strip()
+    normalised = re.sub(r"\s+", " ", text).strip()
+    return f"{normalised} " if trailing_separator and normalised else normalised
 
 
 def canonical_tag(value: Any) -> str:

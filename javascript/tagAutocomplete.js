@@ -958,10 +958,16 @@ function addResultsToList(textArea, results, tagword, resetList, timingSequence 
     }
 
     const fragment = document.createDocumentFragment();
-    const normalizeDisplaySearch = value => globalThis.TACJPCore?.normalizeSearch
-        ? globalThis.TACJPCore.normalizeSearch(value)
-        : String(value || "").toLocaleLowerCase().replaceAll("_", " ").trim();
-    const normalizedTagword = normalizeDisplaySearch(tagword);
+    const normalizeDisplaySearch = (value, preserveTrailingSeparator = false) => globalThis.TACJPCore?.normalizeSearch
+        ? globalThis.TACJPCore.normalizeSearch(value, preserveTrailingSeparator)
+        : (() => {
+            const raw = String(value || "").toLocaleLowerCase();
+            const normalized = raw.replaceAll("_", " ").trim();
+            return preserveTrailingSeparator && raw.endsWith("_") && normalized
+                ? `${normalized} `
+                : normalized;
+        })();
+    const normalizedTagword = normalizeDisplaySearch(tagword, true);
     const buildStart = measureDom ? performance.now() : 0;
     let eventRegistrationMs = 0;
     let renderedItems = 0;
@@ -1547,10 +1553,16 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
         // equivalence. Match quality is ranked exact > prefix > word > substring.
         const substringOnly = tagword.startsWith("*");
         if (substringOnly) tagword = tagword.slice(1);
-        const normaliseSearch = value => globalThis.TACJPCore?.normalizeSearch
-            ? globalThis.TACJPCore.normalizeSearch(value)
-            : String(value || "").toLowerCase().replaceAll("_", " ").trim();
-        const queryNormalized = normaliseSearch(tagword);
+        const normaliseSearch = (value, preserveTrailingSeparator = false) => globalThis.TACJPCore?.normalizeSearch
+            ? globalThis.TACJPCore.normalizeSearch(value, preserveTrailingSeparator)
+            : (() => {
+                const raw = String(value || "").toLowerCase();
+                const normalized = raw.replaceAll("_", " ").trim();
+                return preserveTrailingSeparator && raw.endsWith("_") && normalized
+                    ? `${normalized} `
+                    : normalized;
+            })();
+        const queryNormalized = normaliseSearch(tagword, true);
         const fieldsForTag = row => {
             const values = [row[0]];
             if (TAC_CFG.alias.searchByAlias && row[3]) values.push(...String(row[3]).split(","));
@@ -1558,7 +1570,7 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
             return values.map(normaliseSearch).filter(Boolean);
         };
         const fieldScore = value => globalThis.TACJPCore?.matchScore
-            ? globalThis.TACJPCore.matchScore(value, queryNormalized, substringOnly)
+            ? globalThis.TACJPCore.matchScore(value, tagword, substringOnly)
             : (() => {
                 if (!queryNormalized) return 99;
                 if (substringOnly) return value.includes(queryNormalized) ? 30 : 99;

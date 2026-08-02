@@ -14,7 +14,11 @@ assert.equal(core.isUnderscoreProtected("long_hair", patterns), false);
 assert.equal(core.isUnderscoreProtected("__wildcards/eye-color__", [], "__"), true);
 
 assert.equal(core.normalizeSearch("ＬＯＮＧ＿ＨＡＩＲ"), "long hair");
+assert.equal(core.normalizeSearch("v_", true), "v ");
 assert.equal(core.matchScore("long_hair", "long hair"), 0);
+assert.equal(core.matchScore("v_shaped_elbow", "v_"), 10);
+assert.equal(core.matchScore("very_long_hair", "v_"), 99);
+assert.equal(core.matchScore("long_hair", "long_"), 10);
 assert.equal(core.matchScore("walking_towards_viewer", "towards"), 20);
 assert.equal(core.matchScore("soft natural lighting", "natural light"), 30);
 assert.equal(core.matchScore("soft natural lighting", "natural", true), 30);

@@ -15,6 +15,7 @@ from scripts.tacjp_fast_search_common import (
     build_compact_index,
     compact_index_get,
     is_compact_index,
+    normalize_search,
 )
 from scripts.tacjp_fast_search import FastSearchStore, SearchRequest
 
@@ -111,6 +112,12 @@ def test_compact_index_boundaries_and_reproducibility() -> None:
 
     with pytest.raises(OverflowError):
         build_compact_index({"overflow": (UINT32_MAX + 1,)})
+
+
+def test_trailing_underscore_is_preserved_for_search_queries() -> None:
+    assert normalize_search("v_") == "v"
+    assert normalize_search("v_", preserve_trailing_separator=True) == "v "
+    assert normalize_search("v_shaped_elbow") == "v shaped elbow"
 
 
 def test_six_csv_search_and_deduplication(tmp_path: Path) -> None:
