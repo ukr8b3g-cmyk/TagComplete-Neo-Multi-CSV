@@ -43,7 +43,7 @@
             tag_files: optionList(config?.tagFiles),
             translation_files: optionList(config?.translation?.translationFiles),
             prompt_mode: config?.promptMode || "Tag",
-            candidate_sort_mode: config?.candidateSortMode || "Legacy",
+            candidate_sort_mode: config?.candidateSortMode || "Count",
             context_natural: contextLooksNatural(prompt, cursor),
             search_aliases: config?.alias?.searchByAlias !== false,
             search_translations: config?.translation?.searchByTranslation !== false,
@@ -53,5 +53,21 @@
         };
     }
 
-    return {optionList, clampLimit, eligibleQuery, contextLooksNatural, makeRequest};
+    function makeWarmupRequest(config) {
+        return {
+            tag_files: optionList(config?.tagFiles),
+            translation_files: optionList(
+                config?.translation?.translationFiles,
+            ),
+        };
+    }
+
+    return {
+        optionList,
+        clampLimit,
+        eligibleQuery,
+        contextLooksNatural,
+        makeRequest,
+        makeWarmupRequest,
+    };
 });

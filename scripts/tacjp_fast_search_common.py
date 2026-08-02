@@ -34,7 +34,7 @@ except (ImportError, ModuleNotFoundError):
         DEFAULT_UNDERSCORE_EXCLUSIONS,
     )
 
-CACHE_VERSION = 6
+CACHE_VERSION = 8
 FILE_CACHE_VERSION = 2
 PREFIX_MAX_LENGTH = 3
 DEFAULT_RESULT_LIMIT = 250
@@ -187,14 +187,15 @@ def _split_values(value: Any) -> list[str]:
     return [item.strip() for item in re.split(r"[,;\n\r]+", text) if item.strip()]
 
 
-def _to_int(value: Any, default: int = 0) -> int:
+def _to_int(value: Any) -> int | None:
     text = _clean(value).replace(",", "")
     if not text:
-        return default
+        return None
     try:
-        return int(float(text))
+        count = int(float(text))
     except (TypeError, ValueError):
-        return default
+        return None
+    return count if count >= 0 else None
 
 
 def _to_category(value: Any) -> int | None:
@@ -299,7 +300,7 @@ class SearchRequest:
     tag_files: Sequence[str]
     translation_files: Sequence[str] = ()
     prompt_mode: str = "Tag"
-    candidate_sort_mode: str = "Legacy"
+    candidate_sort_mode: str = "Count"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True
@@ -328,7 +329,7 @@ class _MutableRecord:
         self,
         tag: str,
         category: int | None,
-        count: int,
+        count: int | None,
         aliases: Iterable[str],
         translations: Iterable[str],
         source_type: str,
@@ -350,7 +351,7 @@ class _MutableRecord:
         self,
         *,
         category: int | None,
-        count: int,
+        count: int | None,
         aliases: Iterable[str],
         translations: Iterable[str],
         source_type: str,
@@ -363,8 +364,10 @@ class _MutableRecord:
         for key, value in _dedupe_mapping(translations).items():
             self.translations.setdefault(key, value)
         self.source_mask |= source_mask
-        if count > self.count:
+        if self.count is None:
             self.count = count
+        elif count is not None:
+            self.count = max(self.count, count)
         if self.category is None and category is not None:
             self.category = category
             self.category_scheme = category_scheme

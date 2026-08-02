@@ -804,12 +804,13 @@ def on_ui_settings():
             ]},
         ),
         "tacjp_candidateSortMode": shared.OptionInfo(
-            "Legacy", "Candidate sort mode", gr.Dropdown,
+            "Count", "Candidate sort mode", gr.Dropdown,
             lambda: {"choices": [
                 ("TagComplete Neo compatible (CSV order)", "Legacy"),
                 ("Relevance first", "Relevance"),
+                ("Count first", "Count"),
             ]},
-        ).info("Controls tag candidate order. Prompt mode still controls tag versus natural-language priority."),
+        ).info("Controls tag candidate order. Count first applies only to normal tag CSV entries. Prompt mode still controls tag versus natural-language priority."),
         "tacjp_uiLanguage": shared.OptionInfo(
             "Auto", "Multi-CSV UI language", gr.Dropdown,
             lambda: {"choices": ["Auto", "English", "Japanese"], "visible": False},

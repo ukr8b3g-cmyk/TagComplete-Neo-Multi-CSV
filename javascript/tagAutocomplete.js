@@ -337,7 +337,7 @@ async function syncOptions() {
         tagFiles,
         tagFile: tagFiles[0] || "None", // compatibility for original extension code
         promptMode: opts["tacjp_promptMode"] || "Tag",
-        candidateSortMode: opts["tacjp_candidateSortMode"] || "Legacy",
+        candidateSortMode: opts["tacjp_candidateSortMode"] || "Count",
         uiLanguage: opts["tacjp_uiLanguage"] || "Auto",
         showTranslations: opts["tacjp_showTranslations"] !== false,
         showSourceLabels: !!opts["tacjp_showSourceLabels"],
@@ -1595,7 +1595,12 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
 
         // Use indexed subset for 3+ characters, fallback to full scan if needed.
         let tagsToSearch = allTags;
-        if (TAC_CFG.useIndexedSearch && queryNormalized.length >= 3 && tagIndex.size > 0) {
+        if (
+            TAC_CFG.candidateSortMode !== "Count"
+            && TAC_CFG.useIndexedSearch
+            && queryNormalized.length >= 3
+            && tagIndex.size > 0
+        ) {
             const words = queryNormalized.split(/[_\s]+/);
             const seen = new Set();
             const merged = [];
@@ -1615,11 +1620,19 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
             tagsToSearch = merged.length > 0 ? merged : allTags;
         }
 
+        const getValidTagCount = row => {
+            if ((row._sourceType || "tag") !== "tag") return null;
+            const value = row[2];
+            if (value === null || value === undefined || value === "") return null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+        };
         const scoreCandidates = candidates => candidates
-            .map(row => ({
+            .map((row, originalOrder) => ({
                 row,
                 sourcePenalty: sourcePenalty(row),
                 score: scoreRow(row),
+                originalOrder,
             }))
             .filter(item => item.score < 99);
         let scored = scoreCandidates(tagsToSearch);
@@ -1630,17 +1643,29 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
                 // retains the merged CSV registration order.
                 return a.sourcePenalty - b.sourcePenalty;
             }
+            if (TAC_CFG.candidateSortMode === "Count") {
+                const sourceDifference = a.sourcePenalty - b.sourcePenalty;
+                if (sourceDifference !== 0) return sourceDifference;
+                const aCount = getValidTagCount(a.row);
+                const bCount = getValidTagCount(b.row);
+                if (aCount !== null || bCount !== null) {
+                    if (aCount === null) return 1;
+                    if (bCount === null) return -1;
+                    const countDifference = bCount - aCount;
+                    if (countDifference !== 0) return countDifference;
+                }
+                const scoreDifference = a.score - b.score;
+                if (scoreDifference !== 0) return scoreDifference;
+                return a.originalOrder - b.originalOrder;
+            }
             const scoreDifference = a.score - b.score;
             if (scoreDifference !== 0) return scoreDifference;
             const countDifference = (Number(b.row[2]) || 0) - (Number(a.row[2]) || 0);
             if (countDifference !== 0) return countDifference;
             return String(a.row[0]).localeCompare(String(b.row[0]));
         });
-        const filtered = scored.map(item => {
-            item.row._jpMatchScore = item.score;
-            return item.row;
-        });
-        filtered.forEach(t => {
+        scored.forEach(item => {
+            const t = item.row;
             let result = new AutocompleteResult(t[0].trim(), ResultType.tag);
             result.category = t[1];
             result.count = t[2];
@@ -1651,7 +1676,9 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
             result.sourceFiles = t._sourceFiles || [];
             result.insertMode = t._insertMode || "tag";
             result.categoryScheme = t._categoryScheme || "danbooru";
-            result.matchScore = t._jpMatchScore || 0;
+            result.matchScore = item.score;
+            result.sourcePriority = item.sourcePenalty;
+            result.originalOrder = item.originalOrder;
             results.push(result);
         });
 
@@ -1723,14 +1750,50 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
             resultBiasMap.set(result, weight);
         });
         // Actual sorting with the pre-calculated weights
-        results = results.sort((a, b) => {
+        if (TAC_CFG.candidateSortMode === "Count") {
+            const validCount = result => {
+                if (result.sourceType !== "tag") return null;
+                const value = result.count;
+                if (value === null || value === undefined || value === "") return null;
+                const parsed = Number(value);
+                return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+            };
+            const normalTags = results.filter(result => result.type === ResultType.tag);
+            normalTags.sort((a, b) => {
+                const sourceDifference = (Number(a.sourcePriority) || 0)
+                    - (Number(b.sourcePriority) || 0);
+                if (sourceDifference !== 0) return sourceDifference;
+                const aCount = validCount(a);
+                const bCount = validCount(b);
+                if (aCount !== null || bCount !== null) {
+                    if (aCount === null) return 1;
+                    if (bCount === null) return -1;
+                    const countDifference = bCount - aCount;
+                    if (countDifference !== 0) return countDifference;
+                    const usageDifference = (resultBiasMap.get(b) || 0)
+                        - (resultBiasMap.get(a) || 0);
+                    if (usageDifference !== 0) return usageDifference;
+                }
+                const matchDifference = (Number(a.matchScore) || 0)
+                    - (Number(b.matchScore) || 0);
+                if (matchDifference !== 0) return matchDifference;
+                return (Number(a.originalOrder) || 0)
+                    - (Number(b.originalOrder) || 0);
+            });
+            let index = 0;
+            results = results.map(result => result.type === ResultType.tag
+                ? normalTags[index++]
+                : result);
+        } else {
+            results = results.sort((a, b) => {
             if (TAC_CFG.candidateSortMode === "Legacy") {
                 return resultBiasMap.get(b) - resultBiasMap.get(a);
             }
             const matchDifference = (a.matchScore || 0) - (b.matchScore || 0);
             if (matchDifference !== 0) return matchDifference;
             return resultBiasMap.get(b) - resultBiasMap.get(a);
-        });
+            });
+        }
     }
 
     // Slice if the user has set a max result count and we are not in a extra networks / wildcard list

@@ -41,13 +41,21 @@ class FastSearchBody(BaseModel):
     tag_files: list[str] = Field(default_factory=list, max_items=64)
     translation_files: list[str] = Field(default_factory=list, max_items=64)
     prompt_mode: str = "Tag"
-    candidate_sort_mode: str = "Legacy"
+    candidate_sort_mode: str = "Count"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True
     substring_only: bool = False
     limit: int = Field(default=250, ge=1, le=2000)
     include_sources: bool = False
+
+
+class FastSearchWarmupBody(BaseModel):
+    tag_files: list[str] = Field(default_factory=list, max_items=64)
+    translation_files: list[str] = Field(
+        default_factory=list,
+        max_items=64,
+    )
 
 
 def _json_response(payload, status_code: int = 200):
@@ -184,6 +192,44 @@ def api_fast_search(_: gr.Blocks, app: FastAPI):
             print(f"[TagComplete Neo Multi-CSV] Fast search failed: {exc}")
             return _json_response(
                 {"results": [], "count": 0, "error": str(exc)},
+                500,
+            )
+
+    @app.post("/tacjp/v1/search-warmup")
+    async def tacjp_fast_search_warmup(body: FastSearchWarmupBody):
+        try:
+            result = await asyncio.to_thread(
+                FAST_SEARCH.warmup,
+                body.tag_files,
+                body.translation_files,
+                persistent=bool(
+                    getattr(shared.opts, "tacjp_persistentSearchCache", True)
+                ),
+                memory_entries=int(
+                    getattr(shared.opts, "tacjp_searchMemoryEntries", 4) or 4
+                ),
+                disk_entries=int(
+                    getattr(shared.opts, "tacjp_searchDiskEntries", 8) or 8
+                ),
+            )
+            if getattr(shared.opts, "tacjp_searchDebug", False):
+                print(
+                    "[TagComplete Neo Multi-CSV] warmup "
+                    f"cache={result.get('cache')} total={result.get('total')} "
+                    f"build={result.get('build_ms')}ms "
+                    f"restore={result.get('restore_ms')}ms "
+                    f"request={result.get('warmup_ms')}ms"
+                )
+            return _json_response(result)
+        except (ValueError, FileNotFoundError) as exc:
+            return _json_response(
+                {"status": "error", "error": str(exc)},
+                400,
+            )
+        except Exception as exc:
+            print(f"[TagComplete Neo Multi-CSV] Warmup failed: {exc}")
+            return _json_response(
+                {"status": "error", "error": str(exc)},
                 500,
             )
 

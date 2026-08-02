@@ -242,7 +242,7 @@ class FastSearchFilesMixin:
                 mapping = _as_mapping(header, row)
                 tag = _first(mapping, _TAG_KEYS)
                 category = _to_category(_first(mapping, _CATEGORY_KEYS))
-                count = _to_int(_first(mapping, _COUNT_KEYS))
+                raw_count = _first(mapping, _COUNT_KEYS)
                 aliases = tuple(_split_values(_first(mapping, _ALIAS_KEYS)))
                 translations = tuple(
                     _split_values(_first(mapping, _TRANSLATION_KEYS))
@@ -251,6 +251,7 @@ class FastSearchFilesMixin:
                     name,
                     _first(mapping, _SOURCE_TYPE_KEYS),
                 )
+                count = _to_int(raw_count) if source_type == "tag" else None
                 scheme = infer_category_scheme(
                     name,
                     _first(mapping, _CATEGORY_SCHEME_KEYS),
@@ -263,7 +264,6 @@ class FastSearchFilesMixin:
             else:
                 tag = _clean(row[0] if row else "")
                 category = _to_category(row[1] if len(row) > 1 else "")
-                count = _to_int(row[2] if len(row) > 2 else "")
                 aliases = tuple(
                     _split_values(row[3] if len(row) > 3 else "")
                 )
@@ -271,6 +271,11 @@ class FastSearchFilesMixin:
                     _split_values(row[4] if len(row) > 4 else "")
                 )
                 source_type = file_source
+                count = (
+                    _to_int(row[2] if len(row) > 2 else "")
+                    if source_type == "tag"
+                    else None
+                )
                 scheme = file_scheme
                 insert_mode = infer_insert_mode(tag, source_type)
             if tag and not tag.startswith("#"):

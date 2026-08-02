@@ -180,9 +180,16 @@ def test_fast_search_backend_registers_settings_and_routes(
     app = _FakeApp()
     app_callbacks[0](gradio.Blocks(), app)
     assert ("POST", "/tacjp/v1/search") in app.routes
+    assert ("POST", "/tacjp/v1/search-warmup") in app.routes
     assert ("POST", "/tacjp/v1/search-cache/clear") in app.routes
     assert ("GET", "/tacjp/v1/search-cache/status") in app.routes
 
     body = module.FastSearchBody(query="long", tag_files=[])
     response = asyncio.run(app.routes[("POST", "/tacjp/v1/search")](body))
     assert response.status_code == 200
+
+    warmup_body = module.FastSearchWarmupBody(tag_files=[])
+    warmup_response = asyncio.run(
+        app.routes[("POST", "/tacjp/v1/search-warmup")](warmup_body)
+    )
+    assert warmup_response.status_code == 200

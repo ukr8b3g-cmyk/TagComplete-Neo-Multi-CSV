@@ -212,6 +212,7 @@ const TACJP_SELECT_LABELS = {
         values: {
             Legacy: ["TagComplete Neo compatible (CSV order)", "Neo互換（CSV順）"],
             Relevance: ["Relevance first", "関連度優先"],
+            Count: ["Count first", "投稿数優先"],
         },
     },
 };
@@ -363,6 +364,7 @@ async function tacJpSyncSettingsUi(settings) {
     const candidateSortLabels = {
         Legacy: "TagComplete Neo compatible (CSV order)",
         Relevance: "Relevance first",
+        Count: "Count first",
     };
     const candidateSortInput = gradioApp().querySelector("#setting_tacjp_candidateSortMode input");
     if (
@@ -371,7 +373,7 @@ async function tacJpSyncSettingsUi(settings) {
     ) {
         await tacJpChooseGradioOption(
             "tacjp_candidateSortMode",
-            candidateSortLabels[settings.candidate_sort_mode] || candidateSortLabels.Legacy,
+            candidateSortLabels[settings.candidate_sort_mode] || candidateSortLabels.Count,
         );
     }
     const prefixInput = gradioApp().querySelector("#setting_tac_animaArtistPrefix input");
@@ -426,8 +428,10 @@ function tacJpCandidateSortMode(value) {
         "Neo互換（CSV順）": "Legacy",
         "Relevance first": "Relevance",
         "関連度優先": "Relevance",
+        "Count first": "Count",
+        "投稿数優先": "Count",
     };
-    return modes[value] || value || "Legacy";
+    return modes[value] || value || "Count";
 }
 
 function tacJpArtistPrefix(value) {
@@ -442,7 +446,10 @@ function tacJpLocalizeSelect(option) {
     const root = gradioApp().querySelector(`#${CSS.escape(`setting_${option}`)}`);
     if (!definition || !root) return;
     const languageIndex = tacJpLanguage() === "ja" ? 1 : 0;
-    const textFor = value => definition.values[definition.normalize(value)]?.[languageIndex];
+    const textFor = value => {
+        const cleanValue = String(value || "").replace(/^[\s✓✔]+/, "");
+        return definition.values[definition.normalize(cleanValue)]?.[languageIndex];
+    };
     const localize = () => {
         const input = root.querySelector("input");
         const inputText = input && textFor(input.value);
@@ -459,8 +466,19 @@ function tacJpLocalizeSelect(option) {
     if (!root.dataset.tacjpSelectLocalized) {
         root.dataset.tacjpSelectLocalized = "true";
         root.addEventListener("pointerdown", () => {
+            // Forge Neo may mount the option portal after pointerdown. Watch
+            // the short mount window rather than relying on one timeout.
+            const observer = new MutationObserver(() => {
+                observer.disconnect();
+                localize();
+            });
+            observer.observe(document.body, {childList: true, subtree: true});
             requestAnimationFrame(localize);
             setTimeout(localize, 0);
+            setTimeout(() => {
+                observer.disconnect();
+                localize();
+            }, 250);
         }, true);
     }
 }
@@ -471,7 +489,7 @@ function tacJpCurrentSettings() {
         tag_files: tacJpLiveTokens("tacjp_tagFiles", cfg.tagFiles || opts["tacjp_tagFiles"] || []),
         translation_files: tacJpLiveTokens("tacjp_translationFiles", cfg.translation?.translationFiles || opts["tacjp_translationFiles"] || []),
         prompt_mode: tacJpPromptMode(tacJpLiveValue("tacjp_promptMode", cfg.promptMode || opts["tacjp_promptMode"] || "Tag")),
-        candidate_sort_mode: tacJpCandidateSortMode(tacJpLiveValue("tacjp_candidateSortMode", cfg.candidateSortMode || opts["tacjp_candidateSortMode"] || "Legacy")),
+        candidate_sort_mode: tacJpCandidateSortMode(tacJpLiveValue("tacjp_candidateSortMode", cfg.candidateSortMode || opts["tacjp_candidateSortMode"] || "Count")),
         search_translations: tacJpLiveChecked("tac_translation.searchByTranslation", cfg.translation?.searchByTranslation ?? opts["tac_translation.searchByTranslation"] ?? true),
         show_translations: tacJpLiveChecked("tacjp_showTranslations", cfg.showTranslations ?? opts["tacjp_showTranslations"] ?? true),
         show_source_labels: tacJpLiveChecked("tacjp_showSourceLabels", cfg.showSourceLabels ?? opts["tacjp_showSourceLabels"] ?? false),

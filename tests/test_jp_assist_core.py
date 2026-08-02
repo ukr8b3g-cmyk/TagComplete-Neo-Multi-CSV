@@ -82,7 +82,34 @@ def test_headerless_tagcomplete_and_translation_files(tmp_path: Path) -> None:
     write(store.tag_dir / "custom.csv", 'blue_eyes,0,99,"blueeyes"\n')
     write(store.translation_dir / "ja.csv", "blue_eyes,青い目\n")
     rows = store.merge(["custom.csv"], ["ja.csv"])
-    assert rows == [["blue_eyes", 0, 99, "blueeyes", "青い目", "custom", "tag", "danbooru", ["custom.csv", "ja.csv"], ["custom"]]]
+    assert rows == [["blue_eyes", 0, None, "blueeyes", "青い目", "custom", "tag", "danbooru", ["custom.csv", "ja.csv"], ["custom"]]]
+
+
+def test_count_parsing_and_deduplication_distinguish_zero_from_missing(
+    tmp_path: Path,
+) -> None:
+    store = DataStore(tmp_path / "tags")
+    write(
+        store.tag_dir / "first.csv",
+        "tag,category,count\n"
+        "maximum,0,782\n"
+        "zero,0,0\n"
+        "missing,0,\n",
+    )
+    write(
+        store.tag_dir / "second.csv",
+        "tag,category,count\n"
+        "maximum,0,750\n"
+        "zero,0,\n"
+        "missing,0,abc\n"
+        "negative,0,-1\n",
+    )
+    rows = store.merge(["first.csv", "second.csv"], [])
+    by_name = {row[0]: row for row in rows}
+    assert by_name["maximum"][2] == 782
+    assert by_name["zero"][2] == 0
+    assert by_name["missing"][2] is None
+    assert by_name["negative"][2] is None
 
 
 def test_underscore_protection_patterns() -> None:
@@ -137,11 +164,12 @@ def test_anima_artist_prefix_preset_validation(tmp_path: Path) -> None:
     assert presets.validate_settings({"anima_artist_prefix": "invalid"})["anima_artist_prefix"] == "Off"
 
 
-def test_candidate_sort_mode_preset_validation_defaults_to_legacy(tmp_path: Path) -> None:
+def test_candidate_sort_mode_preset_validation_defaults_to_count(tmp_path: Path) -> None:
     presets = PresetStore(DataStore(tmp_path / "tags"))
-    assert presets.validate_settings({})["candidate_sort_mode"] == "Legacy"
+    assert presets.validate_settings({})["candidate_sort_mode"] == "Count"
     assert presets.validate_settings({"candidate_sort_mode": "Relevance"})["candidate_sort_mode"] == "Relevance"
-    assert presets.validate_settings({"candidate_sort_mode": "invalid"})["candidate_sort_mode"] == "Legacy"
+    assert presets.validate_settings({"candidate_sort_mode": "Count"})["candidate_sort_mode"] == "Count"
+    assert presets.validate_settings({"candidate_sort_mode": "invalid"})["candidate_sort_mode"] == "Count"
 
 
 class FakeResponse:

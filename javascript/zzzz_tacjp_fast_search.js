@@ -5,6 +5,12 @@
     let remoteDisabledForSession = false;
     let activeController = null;
     let requestSequence = 0;
+    let warmupPromise = null;
+    let warmupActiveKey = "";
+    let warmupPendingKey = "";
+    let warmupReadyKey = "";
+    let warmupGeneration = 0;
+    let warmupIdleCancel = null;
 
     const timingState = {
         active: null,
@@ -245,6 +251,105 @@
                 && String(opts?.["tacjp_searchEngine"] || "Server index") !== "Legacy browser";
         }
 
+        function warmupRequest() {
+            return TACJPFastSearchCore.makeWarmupRequest(TAC_CFG);
+        }
+
+        function currentWarmupKey() {
+            if (!serverSelected() || !TAC_CFG) return "";
+            const body = warmupRequest();
+            if (body.tag_files.length === 0) return "";
+            return JSON.stringify(body);
+        }
+
+        function cancelScheduledWarmup() {
+            if (warmupIdleCancel) warmupIdleCancel();
+            warmupIdleCancel = null;
+        }
+
+        function scheduleServerWarmup() {
+            const key = currentWarmupKey();
+            if (!key) {
+                warmupGeneration += 1;
+                warmupPendingKey = "";
+                cancelScheduledWarmup();
+                return;
+            }
+            if (key === warmupReadyKey || key === warmupActiveKey) return;
+
+            warmupPendingKey = key;
+            const generation = ++warmupGeneration;
+            cancelScheduledWarmup();
+            const run = () => {
+                warmupIdleCancel = null;
+                if (generation !== warmupGeneration || key !== currentWarmupKey()) return;
+                if (warmupPromise) return;
+
+                warmupActiveKey = key;
+                warmupPendingKey = "";
+                const body = warmupRequest();
+                if (typeof updateTacStatusDot === "function") {
+                    updateTacStatusDot("loading");
+                }
+                warmupPromise = fetch("tacjp/v1/search-warmup", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(body),
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Never let a stale warmup update the current UI state.
+                        if (key !== currentWarmupKey()) return;
+                        warmupReadyKey = key;
+                        if (typeof updateTacStatusDot === "function") {
+                            updateTacStatusDot("ready");
+                        }
+                        if (opts?.["tacjp_searchDebug"]) {
+                            console.debug("[TagComplete Neo Multi-CSV] search warmup", data);
+                        }
+                    })
+                    .catch(error => {
+                        // A warmup failure is non-fatal: the normal search path retries.
+                        if (key === currentWarmupKey()) {
+                            if (typeof updateTacStatusDot === "function") {
+                                updateTacStatusDot("error");
+                            }
+                            console.warn("[TagComplete Neo Multi-CSV] Search warmup failed", error);
+                        }
+                    })
+                    .finally(() => {
+                        warmupPromise = null;
+                        warmupActiveKey = "";
+                        const pendingKey = warmupPendingKey;
+                        if (pendingKey === key) warmupPendingKey = "";
+                        if (
+                            pendingKey
+                            && pendingKey !== key
+                            && pendingKey === currentWarmupKey()
+                        ) {
+                            scheduleServerWarmup();
+                        }
+                    });
+            };
+
+            if (typeof requestIdleCallback === "function") {
+                const idleId = requestIdleCallback(run, {timeout: 1000});
+                warmupIdleCancel = () => {
+                    if (typeof cancelIdleCallback === "function") {
+                        cancelIdleCallback(idleId);
+                    }
+                };
+            } else {
+                const timeoutId = setTimeout(run, 500);
+                warmupIdleCancel = () => clearTimeout(timeoutId);
+            }
+        }
+
         async function switchToLegacy(error) {
             if (remoteDisabledForSession) return;
             remoteDisabledForSession = true;
@@ -292,6 +397,14 @@
                     }
                 }
                 tagsLoaded = true;
+            });
+            QUEUE_AFTER_CONFIG_CHANGE.push(() => {
+                scheduleServerWarmup();
+            });
+        }
+        if (typeof QUEUE_AFTER_SETUP !== "undefined") {
+            QUEUE_AFTER_SETUP.push(() => {
+                scheduleServerWarmup();
             });
         }
 
@@ -343,7 +456,6 @@
                 activeController = new AbortController();
                 timingState.begin(sequence, tagword);
 
-                if (typeof updateTacStatusDot === "function") updateTacStatusDot("loading");
                 const body = TACJPFastSearchCore.makeRequest(
                     TAC_CFG,
                     tagword,
@@ -381,7 +493,15 @@
                         if (!text) continue;
                         const result = new AutocompleteResult(text, ResultType.tag);
                         result.category = row[1];
-                        result.count = Number(row[2]) || 0;
+                        const rawCount = row[2];
+                        const parsedCount = Number(rawCount);
+                        result.count = (
+                            rawCount === null
+                            || rawCount === undefined
+                            || rawCount === ""
+                            || !Number.isFinite(parsedCount)
+                            || parsedCount < 0
+                        ) ? null : parsedCount;
                         result.aliases = String(row[3] || "");
                         result.translation = String(row[4] || "");
                         result.sourceType = String(row[5] || "tag");
@@ -390,8 +510,15 @@
                         result.sourceFiles = Array.isArray(row[8]) ? row[8] : [];
                         result.sourceTypes = [result.sourceType];
                         result.matchScore = Number(row[9]) || 0;
-                        result.sortKey = TAC_CFG.candidateSortMode === "Legacy"
-                            ? `1:legacy:${String(output.length).padStart(8, "0")}`
+                        result.sourcePriority = Number(row[10]) || 0;
+                        result.originalOrder = Number.isInteger(Number(row[11]))
+                            ? Number(row[11])
+                            : output.length;
+                        result.sortKey = (
+                            TAC_CFG.candidateSortMode === "Legacy"
+                            || TAC_CFG.candidateSortMode === "Count"
+                        )
+                            ? `1:${TAC_CFG.candidateSortMode.toLowerCase()}:${String(output.length).padStart(8, "0")}`
                             : stableSortKey(
                                 "1",
                                 result.matchScore,

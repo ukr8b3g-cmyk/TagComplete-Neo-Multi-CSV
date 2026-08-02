@@ -131,14 +131,15 @@ def _dedupe(values: Iterable[str]) -> list[str]:
     return output
 
 
-def _to_int(value: Any, default: int = 0) -> int:
+def _to_int(value: Any) -> int | None:
     text = _clean(value).replace(",", "")
     if not text:
-        return default
+        return None
     try:
-        return int(float(text))
+        count = int(float(text))
     except (TypeError, ValueError):
-        return default
+        return None
+    return count if count >= 0 else None
 
 
 def _to_category(value: Any) -> int | None:
@@ -270,7 +271,7 @@ def is_underscore_protected(tag: str, patterns: str | Sequence[str]) -> bool:
 class TagRecord:
     tag: str
     category: int | None = None
-    count: int = 0
+    count: int | None = None
     aliases: list[str] = field(default_factory=list)
     translations: list[str] = field(default_factory=list)
     source_type: str = "tag"
@@ -421,19 +422,24 @@ class DataStore:
                 mapping = self._as_mapping(header, row)
                 tag = _first(mapping, _TAG_KEYS)
                 category = _to_category(_first(mapping, _CATEGORY_KEYS))
-                count = _to_int(_first(mapping, _COUNT_KEYS))
+                raw_count = _first(mapping, _COUNT_KEYS)
                 aliases = _split_values(_first(mapping, _ALIAS_KEYS))
                 translations = _split_values(_first(mapping, _TRANSLATION_KEYS))
                 source_type = infer_source_type(display_name, _first(mapping, _SOURCE_TYPE_KEYS))
+                count = _to_int(raw_count) if source_type == "tag" else None
                 scheme = infer_category_scheme(display_name, _first(mapping, _CATEGORY_SCHEME_KEYS))
                 insert_mode = infer_insert_mode(tag, source_type, _first(mapping, _INSERT_MODE_KEYS))
             else:
                 tag = _clean(row[0] if row else "")
                 category = _to_category(row[1] if len(row) > 1 else "")
-                count = _to_int(row[2] if len(row) > 2 else "")
                 aliases = _split_values(row[3] if len(row) > 3 else "")
                 translations = _split_values(row[4] if len(row) > 4 else "")
                 source_type = file_source_type
+                count = (
+                    _to_int(row[2] if len(row) > 2 else "")
+                    if source_type == "tag"
+                    else None
+                )
                 scheme = file_scheme
                 insert_mode = infer_insert_mode(tag, source_type)
             if not tag or tag.startswith("#"):
@@ -485,7 +491,10 @@ class DataStore:
         existing.translations = _dedupe([*existing.translations, *incoming.translations])
         existing.source_files = _dedupe([*existing.source_files, *incoming.source_files])
         existing.source_types = _dedupe([*existing.source_types, *incoming.source_types])
-        existing.count = max(existing.count, incoming.count)
+        if existing.count is None:
+            existing.count = incoming.count
+        elif incoming.count is not None:
+            existing.count = max(existing.count, incoming.count)
 
         # Selection order is priority order. Preserve the first meaningful
         # category/scheme, while always preferring a Booru category over an
@@ -685,9 +694,9 @@ class PresetStore:
         mode = _clean(settings.get("prompt_mode")) or "Tag"
         if mode not in VALID_PROMPT_MODES:
             mode = "Tag"
-        candidate_sort_mode = _clean(settings.get("candidate_sort_mode")) or "Legacy"
-        if candidate_sort_mode not in {"Legacy", "Relevance"}:
-            candidate_sort_mode = "Legacy"
+        candidate_sort_mode = _clean(settings.get("candidate_sort_mode")) or "Count"
+        if candidate_sort_mode not in {"Legacy", "Relevance", "Count"}:
+            candidate_sort_mode = "Count"
         anima_artist_prefix = _clean(settings.get("anima_artist_prefix")) or "Off"
         if anima_artist_prefix not in {"Off", "On", "Auto"}:
             anima_artist_prefix = "Off"

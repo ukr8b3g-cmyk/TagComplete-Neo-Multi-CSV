@@ -6,6 +6,7 @@ import os
 import re
 import threading
 import time
+from array import array
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -136,7 +137,7 @@ class FastSearchIndexMixin:
                     continue
                 record.merge(
                     category=None,
-                    count=0,
+                    count=None,
                     aliases=aliases,
                     translations=translations,
                     source_type=record.source_type,
@@ -152,6 +153,7 @@ class FastSearchIndexMixin:
         search_blobs: list[tuple[str, str, str]] = []
         prefix_lists: dict[str, list[int]] = {}
         unicode_gram_lists: dict[str, list[int]] = {}
+        ascii_trigram_lists: dict[str, list[int]] = {}
         for index, key in enumerate(order):
             record = merged[key]
             aliases = tuple(record.aliases.values())
@@ -230,9 +232,49 @@ class FastSearchIndexMixin:
             for gram_key in unicode_keys:
                 unicode_gram_lists.setdefault(gram_key, []).append(index)
 
+            # A complete ASCII substring index avoids scanning every row in
+            # Count mode before applying the result limit. Final field scoring
+            # still verifies matches, so these postings are only a prefilter.
+            ascii_trigram_keys: set[str] = set()
+            for field in normalised_fields:
+                if len(field) < 3:
+                    continue
+                for start in range(0, len(field) - 2):
+                    gram = field[start:start + 3]
+                    if gram.isascii():
+                        ascii_trigram_keys.add(f"a3:{gram}")
+            for gram_key in ascii_trigram_keys:
+                ascii_trigram_lists.setdefault(gram_key, []).append(index)
+
         prefix_index = build_compact_index(prefix_lists)
         unicode_gram_index = build_compact_index(
             unicode_gram_lists,
+        )
+        ascii_trigram_index = build_compact_index(
+            ascii_trigram_lists,
+        )
+        tag_source_code = _source_code("tag")
+        count_order = array(
+            "I",
+            sorted(
+                (
+                    row_id
+                    for row_id, row in enumerate(rows)
+                    if int(row[5]) == tag_source_code
+                    and isinstance(row[2], int)
+                    and row[2] >= 0
+                ),
+                key=lambda row_id: (-int(rows[row_id][2]), row_id),
+            ),
+        )
+        counted_ids = set(count_order)
+        non_count_ids = array(
+            "I",
+            (
+                row_id
+                for row_id in range(len(rows))
+                if row_id not in counted_ids
+            ),
         )
         self.build_count += 1
         return {
@@ -245,6 +287,9 @@ class FastSearchIndexMixin:
             "search_blobs": search_blobs,
             "prefix_index": prefix_index,
             "unicode_gram_index": unicode_gram_index,
+            "ascii_trigram_index": ascii_trigram_index,
+            "count_order": count_order,
+            "non_count_ids": non_count_ids,
             "build_ms": round(
                 (time.perf_counter() - started) * 1000,
                 2,
@@ -352,6 +397,11 @@ class FastSearchIndexMixin:
                     and is_compact_index(
                         payload.get("unicode_gram_index")
                     )
+                    and is_compact_index(
+                        payload.get("ascii_trigram_index")
+                    )
+                    and isinstance(payload.get("count_order"), array)
+                    and isinstance(payload.get("non_count_ids"), array)
                 ):
                     self._remember_index(
                         signature,

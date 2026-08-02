@@ -99,7 +99,7 @@ def test_compact_index_boundaries_and_reproducibility() -> None:
         }
     )
 
-    assert CACHE_VERSION == 6
+    assert CACHE_VERSION == 8
     assert is_compact_index(first)
     assert len(first["offsets"]) == len(first["keys"]) + 1
     assert first["offsets"][-1] == len(first["values"])
@@ -135,7 +135,7 @@ def test_natural_language_mode_ranking_and_insert_metadata(
     assert first[6] == "phrase"
 
 
-def test_candidate_sort_modes_keep_csv_order_or_rank_relevance(
+def test_candidate_sort_modes_keep_csv_order_or_rank_relevance_or_count(
     tmp_path: Path,
 ) -> None:
     data = DataStore(tmp_path / "tags")
@@ -156,8 +156,91 @@ def test_candidate_sort_modes_keep_csv_order_or_rank_relevance(
     )
     legacy = store.search(SearchRequest(**common, candidate_sort_mode="Legacy"))
     relevance = store.search(SearchRequest(**common, candidate_sort_mode="Relevance"))
+    count = store.search(SearchRequest(**common, candidate_sort_mode="Count"))
     assert [row[0] for row in legacy["results"]] == ["tag_z", "tag_a", "tag_b"]
     assert [row[0] for row in relevance["results"]] == ["tag_a", "tag_b", "tag_z"]
+    assert [row[0] for row in count["results"]] == ["tag_a", "tag_b", "tag_z"]
+
+
+def test_count_sort_keeps_zero_before_missing_counts_and_ignores_natural_language(
+    tmp_path: Path,
+) -> None:
+    data = DataStore(tmp_path / "tags")
+    write(
+        data.tag_dir / "counts.csv",
+        "tag,category,count\n"
+        "earrings_top,0,782\n"
+        "earrings_zero,0,0\n"
+        "earrings_blank,0,\n"
+        "earrings_text,0,abc\n"
+        "earrings_negative,0,-1\n",
+    )
+    write(
+        data.tag_dir / "natural_language_tags.csv",
+        "tag,count,source_type\n"
+        "earrings in soft light,9999,natural_language\n",
+    )
+    store = FastSearchStore(data)
+    result = store.search(
+        SearchRequest(
+            query="earrings",
+            tag_files=["counts.csv", "natural_language_tags.csv"],
+            translation_files=[],
+            prompt_mode="Custom",
+            candidate_sort_mode="Count",
+            limit=20,
+        )
+    )
+    rows = result["results"]
+    assert [row[0] for row in rows] == [
+        "earrings_top",
+        "earrings_zero",
+        "earrings_blank",
+        "earrings_text",
+        "earrings_negative",
+        "earrings in soft light",
+    ]
+    assert [row[2] for row in rows] == [782, 0, None, None, None, None]
+
+
+def test_count_sort_scans_all_matches_before_applying_limit(tmp_path: Path) -> None:
+    data = DataStore(tmp_path / "tags")
+    rows = ["tag,category,count"]
+    rows.extend(f"ring_prefix_{index:03d},0,1" for index in range(300))
+    rows.append("earrings_high_count,0,999")
+    write(data.tag_dir / "counts.csv", "\n".join(rows) + "\n")
+    store = FastSearchStore(data)
+    result = store.search(
+        SearchRequest(
+            query="ring",
+            tag_files=["counts.csv"],
+            translation_files=[],
+            prompt_mode="Tag",
+            candidate_sort_mode="Count",
+            limit=1,
+        )
+    )
+    assert [row[0] for row in result["results"]] == ["earrings_high_count"]
+
+
+def test_count_sort_short_query_uses_global_count_order(tmp_path: Path) -> None:
+    data = DataStore(tmp_path / "tags")
+    rows = ["tag,category,count"]
+    rows.extend(f"ba_prefix_{index:03d},0,1" for index in range(300))
+    rows.append("handbag_high_count,0,999")
+    write(data.tag_dir / "counts.csv", "\n".join(rows) + "\n")
+    store = FastSearchStore(data)
+    result = store.search(
+        SearchRequest(
+            query="ba",
+            tag_files=["counts.csv"],
+            translation_files=[],
+            prompt_mode="Tag",
+            candidate_sort_mode="Count",
+            limit=1,
+        )
+    )
+    assert [row[0] for row in result["results"]] == ["handbag_high_count"]
 
 
 def test_source_metadata_is_optional(tmp_path: Path) -> None:
@@ -195,6 +278,55 @@ def test_persistent_index_is_reused_after_restart(tmp_path: Path) -> None:
     third = restarted.search(request("blue"))
     assert third["cache"] == "memory"
     assert third["restore_ms"] == 0.0
+
+
+def test_warmup_builds_then_restores_the_selected_csv_index(
+    tmp_path: Path,
+) -> None:
+    store = create_six_file_fixture(tmp_path)
+    first = store.warmup(
+        request("blue").tag_files,
+        request("blue").translation_files,
+        persistent=True,
+        memory_entries=4,
+        disk_entries=8,
+    )
+    assert first["status"] == "ready"
+    assert first["cache"] == "build"
+    assert first["total"] == 6
+
+    restarted = FastSearchStore(store.data_store)
+    second = restarted.warmup(
+        request("blue").tag_files,
+        request("blue").translation_files,
+        persistent=True,
+        memory_entries=4,
+        disk_entries=8,
+    )
+    assert second["status"] == "ready"
+    assert second["cache"] == "disk"
+    assert restarted.search(request("blue"))["cache"] == "memory"
+
+
+def test_warmup_uses_single_flight_for_concurrent_requests(
+    tmp_path: Path,
+) -> None:
+    store = create_six_file_fixture(tmp_path)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(
+                store.warmup,
+                request("long").tag_files,
+                request("long").translation_files,
+                persistent=True,
+                memory_entries=4,
+                disk_entries=8,
+            )
+            for _ in range(4)
+        ]
+        results = [future.result(timeout=10) for future in futures]
+    assert all(result["status"] == "ready" for result in results)
+    assert store.build_count == 1
 
 
 def test_csv_change_invalidates_compiled_index(tmp_path: Path) -> None:

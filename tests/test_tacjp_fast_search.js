@@ -8,19 +8,20 @@ assert.strictEqual(core.eligibleQuery("__wildcards/eye-color__", "__"), false);
 assert.strictEqual(core.eligibleQuery("<lora:test", "__"), false);
 assert.strictEqual(core.contextLooksNatural("a girl with soft", 16), true);
 
-const request = core.makeRequest(
-    {
-        tagFiles: ["danbooru.csv", "natural.csv"],
-        translation: {
-            translationFiles: ["ja.csv"],
-            searchByTranslation: true,
-        },
-        alias: {searchByAlias: true},
-        promptMode: "Hybrid",
-        candidateSortMode: "Relevance",
-        showSourceLabels: false,
-        extra: {extraFile: "extra-quality-tags.csv"},
+const requestConfig = {
+    tagFiles: ["danbooru.csv", "natural.csv"],
+    translation: {
+        translationFiles: ["ja.csv"],
+        searchByTranslation: true,
     },
+    alias: {searchByAlias: true},
+    promptMode: "Hybrid",
+    candidateSortMode: "Relevance",
+    showSourceLabels: false,
+    extra: {extraFile: "extra-quality-tags.csv"},
+};
+const request = core.makeRequest(
+    requestConfig,
     "*髪",
     "1girl, 髪",
     8,
@@ -35,5 +36,27 @@ assert.deepStrictEqual(
     ["danbooru.csv", "natural.csv"],
 );
 assert.deepStrictEqual(request.translation_files, ["ja.csv"]);
+
+assert.deepStrictEqual(
+    core.makeWarmupRequest({
+        tagFiles: ["danbooru.csv", "natural.csv"],
+        translation: {translationFiles: ["ja.csv"]},
+    }),
+    {
+        tag_files: ["danbooru.csv", "natural.csv"],
+        translation_files: ["ja.csv"],
+    },
+);
+
+assert.strictEqual(
+    core.makeRequest(
+        {...requestConfig, candidateSortMode: "Count"},
+        "earrings",
+        "earrings",
+        8,
+        {resultPool: 300},
+    ).candidate_sort_mode,
+    "Count",
+);
 
 console.log("tacjp fast search core tests passed");

@@ -24,6 +24,7 @@ global.TAC_CFG = {
     },
 };
 global.QUEUE_AFTER_CONFIG_CHANGE = [];
+global.QUEUE_AFTER_SETUP = [];
 global.tagword = "long";
 global.allTags = [];
 global.tagIndex = new Map();
@@ -51,8 +52,24 @@ global.AutocompleteResult = class {
         this.type = type;
     }
 };
-global.fetch = async (_url, options) => {
+let warmupCalls = 0;
+const idleCallbacks = [];
+global.requestIdleCallback = callback => {
+    idleCallbacks.push(callback);
+    return idleCallbacks.length;
+};
+global.cancelIdleCallback = () => {};
+global.fetch = async (url, options) => {
     const body = JSON.parse(options.body);
+    if (url === "tacjp/v1/search-warmup") {
+        warmupCalls += 1;
+        assert.deepStrictEqual(body, {
+            tag_files: ["danbooru.csv"],
+            translation_files: ["ja.csv"],
+        });
+        return {ok: true, json: async () => ({status: "ready", cache: "memory"})};
+    }
+    assert.strictEqual(url, "tacjp/v1/search");
     assert.strictEqual(body.query, "long");
     assert.deepStrictEqual(body.tag_files, ["danbooru.csv"]);
     return {
@@ -92,6 +109,12 @@ require("../javascript/zzzz_tacjp_fast_search.js");
 
 (async () => {
     assert.strictEqual(PARSERS.length, 1);
+    assert.strictEqual(QUEUE_AFTER_SETUP.length, 1);
+    await QUEUE_AFTER_SETUP[0]();
+    assert.strictEqual(idleCallbacks.length, 1);
+    idleCallbacks.shift()();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.strictEqual(warmupCalls, 1);
     await loadTags(TAC_CFG);
     assert.strictEqual(legacyLoads, 0);
     const parser = PARSERS[0];
@@ -195,6 +218,22 @@ require("../javascript/zzzz_tacjp_fast_search.js");
     assert.ok(extra.sortKey.startsWith("0:"));
     assert.ok(highCount.sortKey.startsWith("1:"));
     assert.ok(highCount.sortKey.localeCompare(lowCount.sortKey) < 0);
+
+    // Server Count order is authoritative. The client must retain it while
+    // keeping an Insert-before extra result ahead of normal tags.
+    TAC_CFG.candidateSortMode = "Count";
+    const countResults = await parser.parse({selectionStart: 4}, "long");
+    const countTags = countResults.filter(result => result.type === ResultType.tag);
+    assert.deepStrictEqual(
+        countTags.map(result => result.text),
+        ["long_low_count", "long_hair"],
+    );
+    const countExtra = countResults.find(result => result.type === ResultType.extra);
+    assert.ok(countExtra);
+    assert.ok(countExtra.sortKey.localeCompare(countTags[0].sortKey) < 0);
+    assert.ok(countTags[0].sortKey.startsWith("1:count:"));
+    assert.ok(countTags[0].sortKey.localeCompare(countTags[1].sortKey) < 0);
+    TAC_CFG.candidateSortMode = "Relevance";
 
     // Experimental full-prompt live translation requires the complete local map,
     // so changing to that mode must load the legacy browser dataset automatically.
