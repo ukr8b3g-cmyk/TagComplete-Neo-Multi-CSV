@@ -3,6 +3,8 @@
 
 # TagComplete Neo Multi-CSV
 
+**最新リリース: v1.1.0**
+
 **[English](#english)**
 
 ## 複数のタグCSVを同時に読み込み・検索
