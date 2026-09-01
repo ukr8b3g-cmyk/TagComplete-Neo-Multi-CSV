@@ -63,6 +63,16 @@ def test_expected_settings_are_registered() -> None:
         assert key in fast_helper
 
 
+def test_remote_update_api_is_hidden_and_disabled_by_default() -> None:
+    helper = (ROOT / "scripts/tag_autocomplete_helper.py").read_text(encoding="utf-8")
+    assert '"tacjp_enableRemoteUpdateApi": shared.OptionInfo(False' in helper
+    route = helper.split('@app.post("/tacjp/v1/update")', 1)[1]
+    disabled_guard = route.index('getattr(shared.opts, "tacjp_enableRemoteUpdateApi", False)')
+    network_call = route.index("JP_UPDATER.update")
+    assert disabled_guard < network_call
+    assert "status_code=403" in route[:network_call]
+
+
 def test_unfinished_preset_controls_are_hidden() -> None:
     ui = (ROOT / "javascript/zz_jpAssistUI.js").read_text(encoding="utf-8")
     assert 'wrapper.className = "tacjp-manager-shell"' in ui
@@ -103,6 +113,7 @@ def test_unfinished_preset_controls_are_hidden() -> None:
 def test_expected_csv_files_are_bundled() -> None:
     expected = {
         "tags/tag_files/danbooru_2025.csv",
+        "tags/tag_files/tags_merged_dedup.csv",
         "tags/tag_files/e621.csv",
         "tags/tag_files/anima_artists.csv",
         "tags/tag_files/anima_characters.csv",
@@ -116,5 +127,5 @@ def test_expected_csv_files_are_bundled() -> None:
 
 def test_default_multi_csv_selection_is_documented_in_code() -> None:
     helper = (ROOT / "scripts/tag_autocomplete_helper.py").read_text(encoding="utf-8")
-    assert '("danbooru_2025.csv", "natural_language_tags.csv")' in helper
+    assert '("tags_merged_dedup.csv", "natural_language_tags.csv")' in helper
     assert '("merged_translations_dedup.csv", "natural_language_ja.csv")' in helper

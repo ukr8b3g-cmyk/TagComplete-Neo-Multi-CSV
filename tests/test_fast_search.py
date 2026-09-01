@@ -4,6 +4,7 @@ import concurrent.futures
 import os
 import pickle
 import time
+from array import array
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from scripts.jp_assist_core import DataStore
 from scripts.tacjp_fast_search_common import (
     CACHE_VERSION,
     UINT32_MAX,
+    _source_code,
     build_compact_index,
     compact_index_get,
     is_compact_index,
@@ -112,6 +114,77 @@ def test_compact_index_boundaries_and_reproducibility() -> None:
 
     with pytest.raises(OverflowError):
         build_compact_index({"overflow": (UINT32_MAX + 1,)})
+
+
+def test_count_order_and_non_count_ids_match_previous_classification(
+    tmp_path: Path,
+) -> None:
+    data = DataStore(tmp_path / "tags")
+    write(
+        data.tag_dir / "mixed-counts.csv",
+        "tag,category,count,source_type\n"
+        "positive_count,0,10,tag\n"
+        "same_positive_count,0,10,tag\n"
+        "zero_count,0,0,tag\n"
+        "missing_count,0,,tag\n"
+        "negative_count,0,-1,tag\n"
+        "invalid_count,0,invalid,tag\n"
+        "natural_language_count,0,99,natural_language\n"
+        "custom_count,0,88,custom\n",
+    )
+    store = FastSearchStore(data)
+    store.search(
+        SearchRequest(
+            query="count",
+            tag_files=["mixed-counts.csv"],
+            translation_files=[],
+            prompt_mode="Custom",
+            candidate_sort_mode="Count",
+            limit=20,
+            persistent_cache=False,
+        )
+    )
+    compiled = next(iter(store._memory.values()))
+    rows = compiled["rows"]
+    tag_source_code = _source_code("tag")
+
+    reference_count_order = array(
+        "I",
+        sorted(
+            (
+                row_id
+                for row_id, row in enumerate(rows)
+                if int(row[5]) == tag_source_code
+                and isinstance(row[2], int)
+                and row[2] >= 0
+            ),
+            key=lambda row_id: (-int(rows[row_id][2]), row_id),
+        ),
+    )
+    reference_counted_ids = set(reference_count_order)
+    reference_non_count_ids = array(
+        "I",
+        (
+            row_id
+            for row_id in range(len(rows))
+            if row_id not in reference_counted_ids
+        ),
+    )
+
+    assert compiled["count_order"] == reference_count_order
+    assert compiled["non_count_ids"] == reference_non_count_ids
+    assert [rows[row_id][0] for row_id in compiled["count_order"]] == [
+        "positive_count",
+        "same_positive_count",
+        "zero_count",
+    ]
+    assert [rows[row_id][0] for row_id in compiled["non_count_ids"]] == [
+        "missing_count",
+        "negative_count",
+        "invalid_count",
+        "natural_language_count",
+        "custom_count",
+    ]
 
 
 def test_trailing_underscore_is_preserved_for_search_queries() -> None:

@@ -254,28 +254,25 @@ class FastSearchIndexMixin:
             ascii_trigram_lists,
         )
         tag_source_code = _source_code("tag")
-        count_order = array(
-            "I",
-            sorted(
-                (
-                    row_id
-                    for row_id, row in enumerate(rows)
-                    if int(row[5]) == tag_source_code
-                    and isinstance(row[2], int)
-                    and row[2] >= 0
-                ),
-                key=lambda row_id: (-int(rows[row_id][2]), row_id),
-            ),
+        counted_row_ids: list[int] = []
+        non_count_ids = array("I")
+        for row_id, row in enumerate(rows):
+            if (
+                int(row[5]) == tag_source_code
+                and isinstance(row[2], int)
+                and row[2] >= 0
+            ):
+                counted_row_ids.append(row_id)
+            else:
+                non_count_ids.append(row_id)
+        # Row IDs arrive in ascending order. Python's stable sort therefore
+        # preserves the existing row-ID tie-break while avoiding a temporary
+        # (-count, row_id) tuple for every counted row.
+        counted_row_ids.sort(
+            key=lambda row_id: rows[row_id][2],
+            reverse=True,
         )
-        counted_ids = set(count_order)
-        non_count_ids = array(
-            "I",
-            (
-                row_id
-                for row_id in range(len(rows))
-                if row_id not in counted_ids
-            ),
-        )
+        count_order = array("I", counted_row_ids)
         self.build_count += 1
         return {
             "version": CACHE_VERSION,

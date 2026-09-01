@@ -1,24 +1,26 @@
 # TagComplete Neo Multi-CSV 検証報告書
 
-**文書状態:** 公開候補<br>
-**対象実装:** `da4a361`<br>
-**検証日:** 2026-07-28<br>
-**確認環境:** Forge Neo `neo 2.27` / Python 3.13.12 / Gradio 4.40.0
+**文書状態:** 現行main整合版（実機Smokeを一部実施）<br>
+**現行main基準:** `dba853e40a86585018ade9388fda90611cef6873`<br>
+**作業ツリー範囲:** 上記コミットを基準とするPhase A-D変更、未コミット<br>
+**自動試験日:** 2026-09-02<br>
+**過去の実機環境:** Forge Neo `neo 2.27` / Python 3.13.12 / Gradio 4.40.0（`da4a361`、2026-07-28）
 
 [English version](VALIDATION_REPORT.md)
 
 ## 1. 目的
 
-本書は、TagComplete Neo Multi-CSVの後半検証で確定した結果を、
-公開可能な試験記録として整理したものです。
+本書は、TagComplete Neo Multi-CSVの現行main仕様と自動試験結果を整合させ、
+過去のForge Neo実機証跡を現行結果と分離して保存するものです。
 
-初期調査中の起動失敗、一時的な実装、採用しなかった試作値は結果表から除外し、
-次の項目だけを記録します。
+現行mainの検証はキャッシュv8とPhase A-Dの作業ツリーを対象にしています。
+3～6章の実機・性能結果は`da4a361`で取得したものです。現行基準で実施した
+Phase D計測とFinal Release Gate Smokeは7章へ分離して記録します。
 
 - 複数CSV検索と候補表示
 - 永続ディスクキャッシュとメモリキャッシュ
 - 入力応答とクライアント描画
-- キャッシュ形式v6の性能
+- 過去のキャッシュ形式v6性能
 - 日本語／英語UI
 - 詳細設定アコーディオンと更新ボタン
 - 自動テストとオフライン検証
@@ -30,16 +32,21 @@
 | 実測 | Forge Neo実機でタイミング値を取得 |
 | 実機確認 | Forge Neo上の表示・操作・DOM状態を確認 |
 | 自動試験 | Python／JavaScriptテストで再現可能 |
+| ローカル実測 | Python `tracemalloc`で最大メモリ使用量を取得 |
+| 過去記録 | 旧コミットで取得した証跡。現行mainの合格判定ではない |
 | 未確認 | 現時点で対応を保証しない |
 
 性能値は当該環境での参考値です。CPU、ストレージ、ブラウザー、
 同時使用拡張、選択CSVによって変動するため、ハードウェア非依存の保証値ではありません。
 
-## 3. 実機試験条件
+## 3. 過去の実機試験条件
+
+3～6章は2026-07-28に`da4a361`で実施したForge Neo試験の記録です。
+現行mainの実機結果またはキャッシュv8の実測値として扱いません。
 
 ### 3.1 Forge Neoソフトウェア環境
 
-現在のForge Neo実行環境で表示されたソフトウェア構成です。
+過去のForge Neo実行環境で表示されたソフトウェア構成です。
 
 | 構成要素 | バージョン／設定 |
 |---|---|
@@ -117,9 +124,12 @@ Multi-CSV検証の再現に不要なため記載していません。
 | Log Multi-CSV search timings | 通常OFF |
 | 通常入力デバウンス | `50 ms` |
 
-## 4. 性能結果
+## 4. 過去の性能結果
 
-### 4.1 キャッシュ形式v6
+### 4.1 過去のキャッシュ形式v6
+
+本節の値は`da4a361`とキャッシュv6で測定したものです。現行実装はキャッシュv8です。
+Phase Dの最大メモリ使用量は7.2節へ分離して記載し、過去のv6値をv8結果へ流用しません。
 
 `prefix_index`と`unicode_gram_index`を
 `keys + offsets + values`の連続配列形式へ変更した結果です。
@@ -138,7 +148,7 @@ PERF-07は選択CSV構成ごとの初回だけ発生します。
 同じCSV構成ではディスクキャッシュを再利用するため、
 起動時の全CSVプリロードは採用していません。
 
-### 4.2 クライアント応答
+### 4.2 過去のクライアント応答
 
 - メモリキャッシュ時の検索APIは約9 msであり、検索本体は主因ではありませんでした。
 - 通常入力では50 msのデバウンスを維持しています。
@@ -149,7 +159,10 @@ PERF-07は選択CSV構成ごとの初回だけ発生します。
 
 判定: 入力応答は実用上合格。デバウンスは50 msを正式採用。
 
-## 5. 機能試験
+## 5. 過去の機能試験
+
+本章の「合格」は`da4a361`のForge Neo実機試験記録です。
+現行mainの証跡は7章へ分離して記載します。
 
 ### 5.1 挿入・除外設定
 
@@ -183,7 +196,10 @@ PERF-07は選択CSV構成ごとの初回だけ発生します。
 | FUNC-14 | Wildcard保護 | `__folder/name__`形式を変換しない | 合格 |
 | FUNC-15 | アンダースコア除外 | glob形式の除外パターンを適用 | 合格 |
 
-## 6. UI実機確認
+## 6. 過去のUI実機確認
+
+以下の「合格」は過去記録です。現行基準で全項目を再実施しておらず、
+Final Release Gateで確認した範囲は7.4節へ分離して記載します。
 
 | 試験ID | 確認内容 | 結果 |
 |---|---|---|
@@ -200,26 +216,29 @@ PERF-07は選択CSV構成ごとの初回だけ発生します。
 | UI-11 | Extra／Chant更新ボタンを各フィールド横に維持 | 合格 |
 | UI-12 | 言語切替後も詳細設定アコーディオン状態を維持 | 合格 |
 
-## 7. 自動試験
+## 7. 現行mainの検証
 
-2026-07-28の公開前確認:
+### 7.1 自動Gate
+
+2026-09-02の現行mainローカルGate（Python 3.13.12／Node.js 25.2.1）:
 
 | 試験 | 件数／結果 |
 |---|---|
 | JavaScript Node test runner | 3件成功 |
-| Python pytest | 32件成功 |
+| Python pytest | 58 passed |
 | Python構文確認 | 成功 |
-| JavaScript構文確認 | 成功 |
+| JavaScript構文確認 | 23ファイル成功 |
 | `tools/verify_extension.py` | PASS |
 | `git diff --check` | 問題なし |
+| GitHub Actions | 未実行（commit／push未実施） |
 
 実行例:
 
 ```powershell
-node --check javascript/zz_jpAssistUI.js
-node --check javascript/zzzz_tacjp_fast_search.js
-node --test tests/*.js
-pytest tests -q -p no:cacheprovider
+python -m pytest -q
+python -m compileall -q scripts tests
+for file in tests/test_*.js; do node "$file"; done
+for file in javascript/*.js tests/*.js; do node --check "$file"; done
 python tools/verify_extension.py
 git diff --check
 ```
@@ -228,15 +247,66 @@ git diff --check
 
 - CSV解析と重複統合
 - 翻訳・Alias統合
-- キャッシュv6の保存／復元
+- キャッシュv8の保存／復元
 - 空索引、該当キーなし、大きな候補集合
 - キャッシュ署名と自動無効化
 - Forge Neo固有ローダー互換
 - Server API登録とLegacy fallback
+- Remote Update APIの既定無効化、URL／リダイレクト拒否、容量制限、アトミック置換
 - AbortControllerと最新リクエスト優先
 - クライアント計測ログ
 - Wildcard・アンダースコア保護
 - 配布ファイル構成
+
+### 7.2 Phase D Fast Search v8 Peak RAM
+
+現行基準でPython `tracemalloc`を使用して取得したローカル実測値です。
+4章のForge Neo実機・キャッシュv6計測とは区別します。
+
+| 測定 | 変更前 | 変更後 | 削減量 |
+|---|---:|---:|---:|
+| 初回フルインデックス構築: タグCSV 2、翻訳CSV 2、合計474,008行 | 763.04 MiB | 729.16 MiB | 33.88 MiB (-4.4%) |
+| 分類処理単体: 750,000行、3回の中央値 | 57.29 MiB | 22.48 MiB | 34.81 MiB (-60.8%) |
+
+機械確認用要約: `763.04 → 729.16 MiB`、`57.29 → 22.48 MiB`。
+
+### 7.3 Phase D correctness
+
+| 確認項目 | 結果 |
+|---|---|
+| Search parity | PASS |
+| `count_order` parity | PASS |
+| `non_count_ids` parity | PASS |
+| Count / Legacy / Relevanceの動作 | 変更なし |
+| `count=0`の動作 | 維持 |
+| cache v8形式 | 変更なし |
+| disk restore test | PASS |
+| memory cache test | PASS |
+| single-flight test | PASS |
+| CSV invalidation test | PASS |
+
+### 7.4 Final Release Gate Smoke Test
+
+確認方法を結果の一部として扱い、未確認項目を実機合格とは判定しません。
+
+| 確認方法 | 確認項目 | 結果 |
+|---|---|---|
+| Forge Neo実機 | 起動／UI、TagComplete Ready、Settings | PASS |
+| Forge Neo実機 | 既定タグCSV 2＋翻訳CSV 2 | PASS |
+| Forge Neo実機 | Server index英語補完、Count first | PASS |
+| Forge Neo実機 | trailing underscore `v_`検索 | PASS |
+| Forge Neo実機 | Legacy browser → Server index切替 | PASS |
+| Forge Neo実機 | cache v8、memory hit、disk cache available | PASS |
+| 実機API | 日本語検索`女の子`: 13件、先頭`1girl` | PASS |
+| 自動試験のみ | `count=0` | PASS |
+| 自動試験のみ | WebUI再起動後のdisk restore functionality | PASS |
+| 未確認 | Japanese IME経由のUI suggestion表示 | 未確認 |
+| 未確認 | WebUIを実際に再起動した後のdisk restore smoke test | 未確認 |
+| 未確認 | reForge current-main smoke test | 未確認 |
+
+ブラウザーコンソールで`sd-dynamic-prompts-main`由来のエラーを1件確認しましたが、
+TagComplete Neo Multi-CSVが出力したエラーではありません。TagComplete固有の
+コンソールエラーは確認されませんでした。
 
 ## 8. 採用仕様
 
@@ -244,26 +314,29 @@ git diff --check
 
 1. 大容量CSVは起動時に全件解析せず、最初の通常タグ検索時に遅延構築する。
 2. 完全な検索索引はPython側へ保持し、ブラウザーには候補プールだけを返す。
-3. 永続キャッシュ形式はv6とし、旧形式は削除せず自動的に無効化する。
+3. 永続キャッシュ形式はv8とし、旧形式は削除せず自動的に無効化する。
 4. 選択CSVの構成またはファイル署名が変わった場合だけ再構築する。
 5. 通常入力デバウンスは50 msとし、Backspace時の即時更新を維持する。
 6. 計測ログは通常OFFとし、診断時だけ有効化する。
 7. TagComplete Neoの既存Providerは従来経路を維持する。
 8. 詳細設定はCOREとCSV+の2区分に分離し、初期状態を閉じる。
 9. 表示言語が日本語の場合は、Multi-CSV項目と標準TagComplete Neo項目を日本語化する。
-10. 未完成のユーザープリセットUIは現行版に表示しない。
+10. プリセットバックエンドと保存データは維持し、プリセット操作UIは現行版で意図的に非表示とする。
 
 ## 9. 未確認・対象外
 
 | 項目 | 状態 |
 |---|---|
-| Forge Neo | 実機確認済み |
+| Forge Neo | 現行mainの一部Smokeを実施。7.4節参照 |
 | Stable Diffusion WebUI Forge | 未確認 |
-| reForge | 未確認 |
+| reForge | 互換経路あり。現行mainの実機再検証待ち |
+| Japanese IME経由のUI suggestion表示 | 未確認。日本語検索APIは実機PASS |
+| WebUI実再起動後のdisk restore smoke | 未実施。機能の自動試験はPASS |
 | 他拡張をすべて無効化した純粋比較 | 未実施 |
 | ハードウェア別性能比較 | 未実施 |
-| ユーザープリセットUI | 次バージョン予定 |
+| ユーザープリセットUI | 意図的に非表示。バックエンドと保存データは維持 |
 | 生成画像品質 | 本拡張の試験対象外 |
 
-本書の「合格」は記載した環境と試験範囲に対する判定であり、
-未確認環境の互換性を保証するものではありません。
+現行の「合格」は7章に記載した確認方法とローカル環境だけに適用します。
+3～6章の「合格」は`da4a361`の過去記録であり、未確認環境や現行mainの
+実機互換性を保証するものではありません。

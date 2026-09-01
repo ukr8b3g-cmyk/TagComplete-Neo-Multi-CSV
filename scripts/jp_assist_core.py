@@ -6,10 +6,12 @@ unit-tested outside Forge. WebUI integration lives in tag_autocomplete_helper.py
 
 import csv
 import fnmatch
+import ipaddress
 import json
 import os
 import re
 import shutil
+import socket
 import tempfile
 import threading
 import unicodedata
@@ -49,6 +51,9 @@ DEFAULT_REMOTE_URL = (
     "https://huggingface.co/datasets/SpadeA/danbooru-tag-csv/resolve/main/"
     "danbooru_tags.csv?download=true"
 )
+MAX_REMOTE_CSV_BYTES = 256 * 1024 * 1024
+MAX_REMOTE_REDIRECTS = 5
+REMOTE_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 
 VALID_PROMPT_MODES = {"Tag", "Hybrid", "Natural Language", "Custom"}
 VALID_INSERT_MODES = {"tag", "phrase", "word", "raw", "wildcard"}
@@ -807,12 +812,113 @@ class RemoteUpdater:
         os.replace(temp, self.meta_path)
 
     @staticmethod
+    def _header(response: Any, name: str) -> str:
+        headers = getattr(response, "headers", {}) or {}
+        value = headers.get(name)
+        if value is None:
+            lower_name = name.casefold()
+            value = next((item for key, item in headers.items() if str(key).casefold() == lower_name), "")
+        return str(value or "")
+
+    @staticmethod
     def _headers(response: Any) -> dict[str, str]:
         return {
-            "etag": response.headers.get("ETag", ""),
-            "last_modified": response.headers.get("Last-Modified", ""),
-            "content_length": response.headers.get("Content-Length", ""),
+            "etag": RemoteUpdater._header(response, "ETag"),
+            "last_modified": RemoteUpdater._header(response, "Last-Modified"),
+            "content_length": RemoteUpdater._header(response, "Content-Length"),
         }
+
+    @staticmethod
+    def _close_response(response: Any) -> None:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
+
+    @staticmethod
+    def _validate_remote_url(url: str) -> str:
+        url = _clean(url)
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
+            raise ValueError("Remote URL must use http:// or https://")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("Remote URL must not include credentials")
+        try:
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        except ValueError as exc:
+            raise ValueError("Remote URL contains an invalid port") from exc
+
+        hostname = parsed.hostname.rstrip(".").casefold()
+        if hostname == "localhost" or hostname.endswith(".localhost"):
+            raise ValueError("Remote URL must not target a local address")
+
+        try:
+            addresses = [ipaddress.ip_address(hostname)]
+        except ValueError:
+            try:
+                resolved = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+            except OSError as exc:
+                raise ValueError("Remote URL hostname could not be resolved") from exc
+            addresses = []
+            for entry in resolved:
+                address_text = str(entry[4][0]).split("%", 1)[0]
+                try:
+                    addresses.append(ipaddress.ip_address(address_text))
+                except ValueError as exc:
+                    raise ValueError("Remote URL resolved to an invalid address") from exc
+            if not addresses:
+                raise ValueError("Remote URL hostname resolved to no addresses")
+
+        if any(not address.is_global for address in addresses):
+            raise ValueError("Remote URL must not target a private, local, or reserved address")
+        return url
+
+    @classmethod
+    def _request_with_redirects(
+        cls,
+        session: Any,
+        method: str,
+        url: str,
+        *,
+        timeout: Any,
+        stream: bool = False,
+    ) -> tuple[Any, str]:
+        current_url = cls._validate_remote_url(url)
+        request = getattr(session, method.lower())
+        for redirect_count in range(MAX_REMOTE_REDIRECTS + 1):
+            kwargs = {"allow_redirects": False, "timeout": timeout}
+            if method.upper() == "GET":
+                kwargs["stream"] = stream
+            response = request(current_url, **kwargs)
+            status_code = int(getattr(response, "status_code", 200))
+            if status_code not in REMOTE_REDIRECT_STATUS_CODES:
+                return response, current_url
+
+            location = cls._header(response, "Location")
+            if not location:
+                cls._close_response(response)
+                raise ValueError("Remote redirect is missing a Location header")
+            if redirect_count >= MAX_REMOTE_REDIRECTS:
+                cls._close_response(response)
+                raise ValueError("Remote URL exceeded the redirect limit")
+            next_url = urllib.parse.urljoin(current_url, location)
+            try:
+                next_url = cls._validate_remote_url(next_url)
+            finally:
+                cls._close_response(response)
+            current_url = next_url
+        raise ValueError("Remote URL exceeded the redirect limit")
+
+    @classmethod
+    def _validate_content_length(cls, response: Any) -> None:
+        content_length = cls._header(response, "Content-Length").strip()
+        if not content_length:
+            return
+        try:
+            size = int(content_length)
+        except ValueError:
+            return
+        if size > MAX_REMOTE_CSV_BYTES:
+            raise ValueError(f"Remote CSV exceeds the {MAX_REMOTE_CSV_BYTES}-byte limit")
 
     @staticmethod
     def _validate_download(path: Path) -> None:
@@ -834,10 +940,7 @@ class RemoteUpdater:
             raise ValueError("Downloaded CSV contains no usable rows")
 
     def update(self, session: Any, url: str, target_name: str, *, timeout: tuple[int, int] = (10, 90)) -> dict[str, Any]:
-        url = _clean(url)
-        parsed_url = urllib.parse.urlparse(url)
-        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-            raise ValueError("Remote URL must use http:// or https://")
+        url = self._validate_remote_url(url)
         target_name = _clean(target_name) or "danbooru_tags.csv"
         if Path(target_name).name != target_name or not target_name.lower().endswith(".csv"):
             raise ValueError("Remote target must be a CSV filename without folders")
@@ -846,9 +949,20 @@ class RemoteUpdater:
             old_meta = self.load_meta()
             head_error = None
             try:
-                head = session.head(url, allow_redirects=True, timeout=timeout[0])
-                head.raise_for_status()
-                remote = {**self._headers(head), "url": url, "target": target_name}
+                head, _head_url = self._request_with_redirects(session, "HEAD", url, timeout=timeout[0])
+                try:
+                    head.raise_for_status()
+                    self._validate_content_length(head)
+                    remote = {**self._headers(head), "url": url, "target": target_name}
+                finally:
+                    self._close_response(head)
+            except ValueError as exc:
+                return {
+                    "updated": False,
+                    "using_existing": target.is_file(),
+                    "error": str(exc),
+                    "target": target_name,
+                }
             except Exception as exc:
                 # Some file hosts reject HEAD while allowing GET. Continue with
                 # an unconditional streamed GET rather than disabling updates.
@@ -869,11 +983,23 @@ class RemoteUpdater:
             target.parent.mkdir(parents=True, exist_ok=True)
             temp = target.with_suffix(target.suffix + ".download")
             try:
-                with session.get(url, allow_redirects=True, stream=True, timeout=timeout) as response:
+                response, _download_url = self._request_with_redirects(
+                    session,
+                    "GET",
+                    url,
+                    stream=True,
+                    timeout=timeout,
+                )
+                with response:
                     response.raise_for_status()
+                    self._validate_content_length(response)
+                    downloaded_bytes = 0
                     with temp.open("wb") as handle:
                         for chunk in response.iter_content(chunk_size=1024 * 1024):
                             if chunk:
+                                downloaded_bytes += len(chunk)
+                                if downloaded_bytes > MAX_REMOTE_CSV_BYTES:
+                                    raise ValueError(f"Remote CSV exceeds the {MAX_REMOTE_CSV_BYTES}-byte limit")
                                 handle.write(chunk)
                 self._validate_download(temp)
                 os.replace(temp, target)

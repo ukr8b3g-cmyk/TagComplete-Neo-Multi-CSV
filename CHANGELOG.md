@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
+- Repaired stale package-layout expectations for the current default CSVs and split Python and JavaScript CI jobs.
+- Hardened the opt-in Remote Update API with a default-disabled hidden option, public-destination checks, manual redirect validation, and a 256 MiB download limit.
+- Aligned README and validation reports with cache v8, current automated results, hidden preset controls, and pending reForge revalidation.
+- Reduced Fast Search v8 full index-build peak RAM from 763.04 MiB to 729.16 MiB (-33.88 MiB / -4.4%) by classifying counted and non-counted rows in one pass, removing the temporary Python set, and using a stable count-only sort.
 - Made `Count first` the default candidate sort mode and display valid `count=0` values.
 - Added v8 compiled indexes with ASCII trigram and count-ranked lookup paths.
 - Warm the selected Server index after startup and retain single-flight construction.
@@ -16,6 +20,7 @@
 - Added settings for search engine selection, result pool size, memory/disk cache limits, timing logs, and cache clearing.
 - Added automatic fallback to the legacy browser index if server search is unavailable.
 - Kept the legacy browser index for compatibility and for experimental full-prompt live translation.
+- Maintained Forge Neo compatibility across the v1.1.0 changes.
 
 ## 1.0.0
 

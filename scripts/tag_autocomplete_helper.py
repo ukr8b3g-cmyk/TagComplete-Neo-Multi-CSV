@@ -827,6 +827,7 @@ def on_ui_settings():
         "tacjp_activePreset": shared.OptionInfo("", "Active user preset", gr.Textbox, lambda: {"visible": False}),
         # Hidden compatibility values from the discontinued remote-update UI.
         "tacjp_autoUpdate": shared.OptionInfo(False, "Legacy remote update", gr.Checkbox, lambda: {"visible": False}),
+        "tacjp_enableRemoteUpdateApi": shared.OptionInfo(False, "Enable remote update API", gr.Checkbox, lambda: {"visible": False}),
         "tacjp_remoteUrl": shared.OptionInfo(DEFAULT_REMOTE_URL, "Legacy remote URL", gr.Textbox, lambda: {"visible": False}),
         "tacjp_remoteTarget": shared.OptionInfo("danbooru_2025.csv", "Legacy remote target", gr.Textbox, lambda: {"visible": False}),
         # Hidden legacy fallback values.
@@ -1232,11 +1233,17 @@ def api_tac(_: gr.Blocks, app: FastAPI):
 
     @app.post("/tacjp/v1/update")
     async def tacjp_update(body: JpRemoteUpdateRequest):
+        if not getattr(shared.opts, "tacjp_enableRemoteUpdateApi", False):
+            return JSONResponse(
+                {"updated": False, "error": "Remote Update API is disabled"},
+                status_code=403,
+            )
         url = body.url or getattr(shared.opts, "tacjp_remoteUrl", DEFAULT_REMOTE_URL)
         target = body.target or getattr(shared.opts, "tacjp_remoteTarget", "danbooru_tags.csv")
         try:
             result = await asyncio.to_thread(JP_UPDATER.update, requests, url, target)
-            update_tag_files()
+            if result.get("updated"):
+                update_tag_files()
             return JSONResponse(result, status_code=200 if not result.get("error") else 502)
         except ValueError as exc:
             return JSONResponse({"updated": False, "error": str(exc)}, status_code=400)

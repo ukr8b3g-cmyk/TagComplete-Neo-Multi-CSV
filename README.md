@@ -12,11 +12,12 @@
 Danbooru 2025、e621、自然言語、Anima、ユーザーCSVを、
 モデルや用途に合わせて組み合わせられます。
 
-**Forge Neo／reForge向け、複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
+**Forge Neo向け、reForge互換経路を維持した複数CSV・翻訳検索・自然言語辞書対応のタグ補完拡張**
 
 A Forge Neo and reForge compatible fork of TagComplete Neo with multiple CSV sources,
 separate translation files, Japanese/translated search, natural-language
-vocabularies, user presets, and safe prompt insertion.
+vocabularies, a retained preset backend, and safe prompt insertion. Preset
+controls are intentionally hidden in the current release.
 
 </div>
 
@@ -44,7 +45,7 @@ DominikDoom/a1111-sd-webui-tagcomplete
 - **原点:** `a1111-sd-webui-tagcomplete` — TagCompleteの基本機能
 - **直接のフォーク元:** `sd-webui-tagcomplete-neo` — Forge Neo対応、互換性・性能改善
 - **このフォーク:** 複数タグCSV、分離翻訳CSV、自然言語辞書、
-  サーバー検索、永続キャッシュ、ユーザープリセットを追加
+  サーバー検索、永続キャッシュ、プリセットバックエンドを追加
 
 元プロジェクトの機能と成果を尊重しつつ、本READMEはMulti-CSV版の実際の構成・
 設定・検証結果に合わせて独自に記述しています。
@@ -56,10 +57,11 @@ DominikDoom/a1111-sd-webui-tagcomplete
 ### 対応環境
 
 - Stable Diffusion WebUI Forge Neo
-- Stable Diffusion WebUI reForge
+- Stable Diffusion WebUI reForge（互換経路あり、現行mainの実機再検証待ち）
 - Gradio 3系・4系で異なる主要DOM構造を考慮
 
-Forge NeoとreForgeの両方で実機動作を確認済みです。
+Forge Neoは既存の実機検証範囲があります。reForge向け互換経路は維持していますが、
+現行mainでのreForge実機再検証は未実施です。
 通常のStable Diffusion WebUI Forgeは未確認のため、対応環境には含めていません。
 
 主な用途:
@@ -101,7 +103,7 @@ Forge NeoとreForgeの両方で実機動作を確認済みです。
 - アンダースコア保護パターンのワイルドカード指定
 - 大容量CSV向けサーバー検索とv8永続キャッシュ
 - 投稿数優先の候補並び替え（`count=0`も有効値として表示）
-- ユーザーが保存したプリセットだけを管理
+- プリセットバックエンドと既存保存データを維持（操作UIは非表示）
 - Animaアーティストタグへの`@`付与設定
 - 設定項目の日本語・英語マウスオーバーヘルプ
 
@@ -378,20 +380,9 @@ Danbooruなどのタグ辞書を優先します。SDXL、Illustrious XL、Pony�
 
 ### ユーザープリセット
 
-現行版では、Danbooru・SDXL・Animaなどの標準プリセットは表示せず、
-ユーザーが保存したプリセットだけを管理します。
-
-利用できる操作:
-
-- 現在のMulti-CSV設定を名前付きで保存
-- 保存済みプリセットを適用
-- 保存済みプリセットを削除
-- JSONへエクスポート
-- JSONからインポート
-- 選択中のCSVが別環境に存在しない場合、その参照だけを安全に除外して適用
-
-既存のユーザープリセットデータは維持されます。
-保存済みプリセットがない場合は「保存済みプリセットなし」と表示されます。
+プリセットバックエンド、保存形式、API、既存のユーザープリセットデータは互換性のため維持されています。
+ただし、ユーザープリセット操作UIは現行リリースで意図的に非表示です。
+今回の整合作業ではプリセット操作UIを有効化していません。
 
 ### 検索
 
@@ -631,7 +622,7 @@ This repository is directly derived from `sd-webui-tagcomplete-neo`, which is
 itself a Forge Neo fork of DominikDoom's original TagComplete extension. This
 fork retains the established completion UI and providers while adding multiple
 tag CSVs, separate translation CSVs, natural-language dictionaries,
-server-side search, persistent caching, and user presets.
+server-side search, persistent caching, and a retained preset backend.
 
 ### Overview
 
@@ -649,7 +640,7 @@ Key additions:
 - Glob-style underscore exclusion patterns
 - Server-side search with a persistent v8 cache
 - Count-first candidate ordering, including visible `count=0` values
-- User-only presets without bundled model presets
+- Preset backend and stored user data retained; preset controls currently hidden
 - Configurable `@` prefix for Anima artist tags
 - Bilingual hover help for settings
 
@@ -871,20 +862,9 @@ browser language. Stored values and JSON keys remain unchanged for compatibility
 
 ### User presets
 
-Only user-created presets are shown. Bundled Danbooru, SDXL, and Anima presets
-are intentionally hidden.
-
-Available actions:
-
-- Save the current Multi-CSV settings under a name
-- Apply a saved preset
-- Delete a saved preset
-- Export presets as JSON
-- Import presets from JSON
-- Safely omit file references that do not exist on the current installation
-
-Existing user preset data is preserved. When no user presets exist, the UI
-shows that there are no saved presets.
+The preset backend, storage format, API, and existing user preset data remain
+available for compatibility. Preset controls are intentionally hidden in the
+current release and were not enabled by this documentation alignment.
 
 ### Search and suggestions
 
@@ -977,15 +957,17 @@ python tools/verify_extension.py
 ```
 
 This validates Python/JavaScript syntax and the WebUI-independent merge, preset,
-and wildcard-protection logic. A real Forge Neo or reForge installation is still
-required for final UI and integration testing.
+and wildcard-protection logic. A real WebUI installation is still required for
+final UI and integration testing.
 
 ### Compatibility notes
 
-Forge Neo and reForge have both been verified on real installations. Standard
-Stable Diffusion WebUI Forge has not yet been verified and is not listed as a
-supported environment. Runtime compatibility can still depend on WebUI changes,
-other extensions, browser versions, and local model directory settings.
+Forge Neo has an existing real-installation validation record. The reForge
+compatibility path remains in the implementation, but current-main revalidation
+on reForge is pending. Standard Stable Diffusion WebUI Forge has not yet been
+verified and is not listed as a supported environment. Runtime compatibility can
+still depend on WebUI changes, other extensions, browser versions, and local
+model directory settings.
 
 ---
 

@@ -208,17 +208,17 @@ def test_remote_update_is_conditional_and_atomic(tmp_path: Path) -> None:
     updater = RemoteUpdater(store)
     session = FakeSession()
 
-    first = updater.update(session, "https://example.invalid/tags.csv", "remote.csv")
+    first = updater.update(session, "https://93.184.216.34/tags.csv", "remote.csv")
     assert first["updated"] is True
     assert (store.tag_dir / "remote.csv").is_file()
     assert session.get_calls == 1
 
-    second = updater.update(session, "https://example.invalid/tags.csv", "remote.csv")
+    second = updater.update(session, "https://93.184.216.34/tags.csv", "remote.csv")
     assert second["updated"] is False
     assert session.get_calls == 1
 
     session.version = 2
-    third = updater.update(session, "https://example.invalid/tags.csv", "remote.csv")
+    third = updater.update(session, "https://93.184.216.34/tags.csv", "remote.csv")
     assert third["updated"] is True
     assert session.get_calls == 2
     assert "value_2" in (store.tag_dir / "remote.csv").read_text()
@@ -301,6 +301,6 @@ def test_remote_update_rejects_non_text_payload(tmp_path: Path) -> None:
         def get(self, url, allow_redirects=True, stream=True, timeout=(10, 90)):
             return FakeResponse(data=b"bad\x00payload")
 
-    result = updater.update(BadSession(), "https://example.invalid/bad.csv", "bad.csv")
+    result = updater.update(BadSession(), "https://93.184.216.34/bad.csv", "bad.csv")
     assert result["updated"] is False
     assert not (store.tag_dir / "bad.csv").exists()
