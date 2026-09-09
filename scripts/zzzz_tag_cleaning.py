@@ -1,7 +1,5 @@
 """Forge/Forge Neo integration for the optional Danbooru Tag Cleaning Assist."""
 
-from __future__ import annotations
-
 import asyncio
 import sys
 from pathlib import Path
@@ -25,6 +23,7 @@ except (ImportError, ModuleNotFoundError):
 
 CLEANING_ROOT = Path(TAGS_PATH) / "cleaning"
 CLEANING = TagCleaningStore(CLEANING_ROOT)
+_STATUS_REFRESH_VALUE: str | None = None
 
 
 class CleaningLookupItem(BaseModel):
@@ -68,7 +67,19 @@ def update_cleaning_database():
 
 
 def refresh_cleaning_status():
-    return _database_status_text()
+    global _STATUS_REFRESH_VALUE
+    _STATUS_REFRESH_VALUE = _database_status_text()
+    return _STATUS_REFRESH_VALUE
+
+
+def cleaning_status_component_args():
+    """Pass the refreshed value through Forge Neo's component-args callback."""
+    global _STATUS_REFRESH_VALUE
+    if _STATUS_REFRESH_VALUE is None:
+        return {}
+    value = _STATUS_REFRESH_VALUE
+    _STATUS_REFRESH_VALUE = None
+    return {"value": value}
 
 
 def on_ui_settings():
@@ -107,17 +118,17 @@ def on_ui_settings():
     for key, option in options.items():
         shared.opts.add_option(key, option)
 
-    shared.opts.add_option(
-        "tacjp_cleaningStatus",
-        shared.OptionInfo(
-            _database_status_text(),
-            "Tag Cleaning database status",
-            gr.HTML,
-            {},
-            refresh=refresh_cleaning_status,
-            section=section,
-        ),
+    status_option = shared.OptionInfo(
+        _database_status_text(),
+        "Tag Cleaning database status",
+        gr.HTML,
+        cleaning_status_component_args,
+        refresh=refresh_cleaning_status,
+        section=section,
     )
+    status_option.do_not_save = True
+    shared.opts.data.pop("tacjp_cleaningStatus", None)
+    shared.opts.add_option("tacjp_cleaningStatus", status_option)
     shared.opts.add_option(
         "tacjp_cleaningUpdate",
         shared.OptionInfo(

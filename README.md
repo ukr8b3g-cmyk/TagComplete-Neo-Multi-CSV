@@ -3,7 +3,7 @@
 
 # TagComplete Neo Multi-CSV
 
-**最新リリース: v1.1.0**
+**最新リリース: v1.2.0**
 
 **[English](#english)**
 
@@ -108,6 +108,23 @@ Forge Neoは既存の実機検証範囲があります。reForge向け互換経�
 - プリセットバックエンドと既存保存データを維持（操作UIは非表示）
 - Animaアーティストタグへの`@`付与設定
 - 設定項目の日本語・英語マウスオーバーヘルプ
+- 任意で有効化できるDanbooru Tag Cleaning Assist
+
+### Danbooru Tag Cleaning Assist（v1.2.0）
+
+Forge / Forge Neo向けの任意機能です。通常のTagComplete候補を変更せず、
+公開データセット`Grio43/Tag_cleaning`の補正傾向を候補へ追加表示します。
+
+- 既定値は`OFF`
+- remove比率が高い候補へ`⚠ correction`を表示
+- 十分なsupportとconfidenceがある共起タグを`Related adds`として表示
+- タグを自動置換・削除せず、候補順位と挿入テキストも変更しない
+- 明示的な更新操作でローカルSQLite DBをダウンロード・構築
+- 通常補完では表示中のDanbooru候補だけをバッチ照会し、結果をキャッシュ
+- `OFF`時はCleaning lookupを呼び出さず、従来のAutocomplete経路を維持
+
+設定とデータの意味、DB構築手順については
+[TAG_CLEANING.md](TAG_CLEANING.md)を参照してください。
 
 ### インストール
 
@@ -645,6 +662,22 @@ Key additions:
 - Preset backend and stored user data retained; preset controls currently hidden
 - Configurable `@` prefix for Anima artist tags
 - Bilingual hover help for settings
+- Optional Danbooru Tag Cleaning Assist
+
+### Danbooru Tag Cleaning Assist (v1.2.0)
+
+This optional Forge / Forge Neo feature annotates normal TagComplete candidates
+with correction signals from the public `Grio43/Tag_cleaning` dataset.
+
+- Disabled by default
+- Shows `⚠ correction` for strongly remove-heavy correction data
+- Shows qualifying co-occurring tags as `Related adds`
+- Never rewrites or removes tags, changes candidate ranking, or changes insertion text
+- Downloads and builds an extension-local SQLite database only on explicit update
+- Looks up only the currently displayed Danbooru candidates and caches the results
+- Makes no Cleaning lookup when disabled, preserving the existing autocomplete path
+
+See [TAG_CLEANING.md](TAG_CLEANING.md) for semantics, settings, and database details.
 
 ### Installation
 

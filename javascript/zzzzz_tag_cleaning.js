@@ -34,8 +34,32 @@
         document.head.appendChild(style);
     }
 
+    function installSettingsStatusRefresh() {
+        if (document.documentElement.dataset.tacjpCleaningStatusRefresh) return;
+        document.documentElement.dataset.tacjpCleaningStatusRefresh = "true";
+        document.addEventListener("change", event => {
+            if (!event.target.matches?.(
+                "#setting_tacjp_cleaningEnabled input[type='checkbox']"
+            )) return;
+            if (!event.target.checked) {
+                gradioApp().querySelectorAll(
+                    ".acCleaningBadge, .acCleaningSuggestions"
+                ).forEach(node => node.remove());
+            }
+        });
+        document.addEventListener("click", event => {
+            if (!event.target.closest?.("#settings_submit")) return;
+            setTimeout(() => gradioApp()
+                .querySelector("#refresh_tacjp_cleaningStatus")?.click(), 0);
+        });
+    }
+
     function enabled() {
-        return !!globalThis.opts?.["tacjp_cleaningEnabled"];
+        const checkbox = gradioApp().querySelector(
+            "#setting_tacjp_cleaningEnabled input[type='checkbox']"
+        );
+        if (checkbox) return checkbox.checked;
+        return typeof opts !== "undefined" && !!opts["tacjp_cleaningEnabled"];
     }
 
     function keyFor(result) {
@@ -157,6 +181,7 @@
         }
         installed = true;
         injectStyle();
+        installSettingsStatusRefresh();
         const original = addResultsToList;
         addResultsToList = function tagCleaningAddResults(textArea, results, ...rest) {
             const output = original.call(this, textArea, results, ...rest);
