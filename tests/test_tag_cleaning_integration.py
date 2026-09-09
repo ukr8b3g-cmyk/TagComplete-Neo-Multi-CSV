@@ -57,6 +57,14 @@ class _FakeApp:
         return self._register("POST", path)
 
 
+class _BaseModel:
+    pass
+
+
+def _field(default=None, *, default_factory=None, **_kwargs):
+    return default_factory() if default_factory is not None else default
+
+
 def test_forge_loader_keeps_lookup_model_and_status_refresh_working(
     tmp_path: Path,
     monkeypatch,
@@ -82,6 +90,10 @@ def test_forge_loader_keeps_lookup_model_and_status_refresh_working(
     responses = types.ModuleType("fastapi.responses")
     responses.JSONResponse = lambda content: content
 
+    pydantic = types.ModuleType("pydantic")
+    pydantic.BaseModel = _BaseModel
+    pydantic.Field = _field
+
     shared_paths = types.ModuleType("scripts.shared_paths")
     shared_paths.TAGS_PATH = tmp_path / "tags"
 
@@ -89,6 +101,7 @@ def test_forge_loader_keeps_lookup_model_and_status_refresh_working(
     monkeypatch.setitem(sys.modules, "gradio", gradio)
     monkeypatch.setitem(sys.modules, "fastapi", fastapi)
     monkeypatch.setitem(sys.modules, "fastapi.responses", responses)
+    monkeypatch.setitem(sys.modules, "pydantic", pydantic)
     monkeypatch.setitem(sys.modules, "scripts.shared_paths", shared_paths)
 
     path = Path(__file__).resolve().parents[1] / "scripts" / "zzzz_tag_cleaning.py"
