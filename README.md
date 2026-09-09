@@ -35,9 +35,11 @@ controls are intentionally hidden in the current release.
 ### リリースと旧バージョン
 
 - **最新版:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
+- **v1.2.0 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.0.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.0.zip)
 - **旧バージョン:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
-各Releaseページから、そのバージョンのソースZIPまたはtar.gzをダウンロードできます。
+現在、`Code` → `Download ZIP`、`Install from URL`、上記のv1.2.0 ZIPのいずれからも、
+Tag Cleaning Assistを含むv1.2.0を取得できます。ReleaseのZIPはv1.2.0固定です。
 
 > このプロジェクトは `sd-webui-tagcomplete-neo` を基盤としたフォークです。<br>
 > 候補ポップアップ、キーボード操作、カテゴリ色、LoRA・Embedding・Wildcard・Chantなど、
@@ -639,9 +641,11 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 ### Releases and previous versions
 
 - **Latest:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
+- **Direct v1.2.0 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.0.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.0.zip)
 - **Previous:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
-Each release page provides a source ZIP and tar.gz archive for that version.
+The current `Code` → `Download ZIP`, `Install from URL`, and the direct v1.2.0 ZIP above
+all provide v1.2.0 with Tag Cleaning Assist. The release ZIP remains fixed to v1.2.0.
 
 ### Project lineage
 
