@@ -32,6 +32,13 @@ controls are intentionally hidden in the current release.
 > **For the latest version, install directly from the GitHub repository.**<br>
 > The ZIP distributed on Civitai is a release snapshot and may be older than the current GitHub version.
 
+### リリースと旧バージョン
+
+- **最新版:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
+- **旧バージョン:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
+
+各Releaseページから、そのバージョンのソースZIPまたはtar.gzをダウンロードできます。
+
 > このプロジェクトは `sd-webui-tagcomplete-neo` を基盤としたフォークです。<br>
 > 候補ポップアップ、キーボード操作、カテゴリ色、LoRA・Embedding・Wildcard・Chantなど、
 > TagComplete Neoの操作感を維持しながら、Danbooru Tag JP Assistの辞書管理方式を統合しています。
@@ -628,6 +635,13 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 ---
 
 ## English
+
+### Releases and previous versions
+
+- **Latest:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
+- **Previous:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
+
+Each release page provides a source ZIP and tar.gz archive for that version.
 
 ### Project lineage
 
