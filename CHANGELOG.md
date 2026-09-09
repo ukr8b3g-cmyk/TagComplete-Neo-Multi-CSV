@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0
+
+- Added optional **Danbooru Tag Cleaning Assist** for Forge / Forge Neo; default is OFF.
+- Added a separate SQLite correction index so normal autocomplete never scans the 1.74M-row source Parquet.
+- Added Settings controls for enable/disable, remove-heavy warnings, strong related-add hints, and sensitivity.
+- Added an explicit database download/build action. It downloads `Grio43/Tag_cleaning`, uses extension-local DuckDB 1.4.1 only for index construction, then deletes the temporary Parquet source.
+- Added batched local lookup and browser/Python caches so only currently displayed Danbooru candidates are checked.
+- Added correction badges and related-add hints without changing prompt insertion text or the existing Fast Search result set.
+- Kept correction semantics conservative: `remove` is not treated as a deprecated-tag signal, and co-occurring `add` tags are hints rather than automatic replacements.
+- Added category-aware lookup to avoid general/artist/copyright/character/meta name collisions.
+- Added unit coverage for normalization, sensitivity fallback, warning thresholds, related-add confidence, and category separation.
+
 ## 1.1.0
 
 - Repaired stale package-layout expectations for the current default CSVs and split Python and JavaScript CI jobs.
