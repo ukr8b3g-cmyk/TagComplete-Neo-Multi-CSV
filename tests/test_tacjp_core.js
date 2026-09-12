@@ -48,4 +48,59 @@ assert.deepEqual(
 assert.equal(core.phraseReplacementRange("natural", 7, "soft natural lighting"), null);
 assert.equal(core.phraseReplacementRange("soft nat", 8, "with"), null);
 
+assert.deepEqual(
+    core.resolveTagWeightTarget("1girl, blue hair, smile", 11, 11),
+    {
+        start: 7,
+        end: 16,
+        raw: "blue hair",
+        baseText: "blue hair",
+        weight: 1,
+        open: "(",
+        close: ")",
+    },
+);
+assert.equal(
+    core.adjustTagWeight("blue hair", 4, 4, 1).value,
+    "(blue hair:1.05)",
+);
+assert.equal(
+    core.adjustTagWeight("(blue hair:1.05)", 4, 4, -1).value,
+    "blue hair",
+);
+assert.equal(
+    core.adjustTagWeight("blue hair", 4, 4, -1).value,
+    "(blue hair:0.95)",
+);
+assert.equal(
+    core.adjustTagWeight("(long black hair:1.10)", 5, 5, 1).value,
+    "(long black hair:1.15)",
+);
+assert.equal(
+    core.adjustTagWeight("1girl, long black hair, smile", 7, 22, 1).replacement,
+    "(long black hair:1.05)",
+);
+assert.equal(
+    core.adjustTagWeight("(blue hair:0.05)", 4, 4, -1).value,
+    "(blue hair:0.00)",
+);
+assert.equal(core.adjustTagWeight("(blue hair:0.00)", 4, 4, -1), null);
+
+for (const unsupported of [
+    "[red:blue:0.5]",
+    "[tag:1.20]",
+    "(tag)",
+    "<lora:test:1.0>",
+    "<lyco:test:1.0>",
+    "embedding:test",
+    "emb:test",
+    "__hair/color__",
+    "{red|blue}",
+    "$chant",
+]) {
+    const caret = Math.floor(unsupported.length / 2);
+    assert.equal(core.resolveTagWeightTarget(unsupported, caret, caret), null);
+}
+assert.equal(core.resolveTagWeightTarget("blue hair, smile", 0, 16), null);
+
 console.log("tacjp_core.js tests passed");

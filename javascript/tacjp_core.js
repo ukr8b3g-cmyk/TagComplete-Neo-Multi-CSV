@@ -154,6 +154,106 @@
         return null;
     }
 
+    function resolveTagWeightTarget(value, selectionStart, selectionEnd) {
+        const text = String(value ?? "");
+        let start = Math.max(0, Math.min(Number(selectionStart) || 0, text.length));
+        let end = Math.max(start, Math.min(Number(selectionEnd) || start, text.length));
+
+        if (start === end) {
+            const before = text.slice(0, start);
+            const leftBoundary = Math.max(
+                before.lastIndexOf(","),
+                before.lastIndexOf("\n"),
+                before.lastIndexOf("\r"),
+            );
+            start = leftBoundary + 1;
+
+            const after = text.slice(end);
+            const rightOffsets = [
+                after.indexOf(","),
+                after.indexOf("\n"),
+                after.indexOf("\r"),
+            ].filter(index => index >= 0);
+            end = rightOffsets.length > 0
+                ? end + Math.min(...rightOffsets)
+                : text.length;
+        }
+
+        while (start < end && /\s/u.test(text[start])) start++;
+        while (end > start && /\s/u.test(text[end - 1])) end--;
+        if (start >= end) return null;
+
+        const raw = text.slice(start, end);
+        const unsupported = raw.includes("__")
+            || ["[", "]", "<", ">", "{", "}", "|", "\r", "\n", ","].some(char => raw.includes(char))
+            || raw.startsWith("$")
+            || /^(?:embedding|emb):/iu.test(raw);
+        if (unsupported) return null;
+
+        const weighted = raw.match(
+            /^\((.+):([+-]?(?:\d+(?:\.\d+)?|\.\d+))\)$/u,
+        );
+        if (weighted) {
+            const baseText = weighted[1].trim();
+            const weight = Number(weighted[2]);
+            const unsupportedBase = !baseText
+                || baseText.includes("__")
+                || ["(", ")", "[", "]", "<", ">", "{", "}", "|", ",", ":", "\r", "\n"].some(char => baseText.includes(char))
+                || baseText.startsWith("$")
+                || /^(?:embedding|emb):/iu.test(baseText);
+            if (unsupportedBase || !Number.isFinite(weight)) return null;
+
+            return {
+                start,
+                end,
+                raw,
+                baseText,
+                weight,
+                open: "(",
+                close: ")",
+            };
+        }
+
+        if (raw.includes("(") || raw.includes(")") || raw.includes(":")) return null;
+
+        return {
+            start,
+            end,
+            raw,
+            baseText: raw,
+            weight: 1.0,
+            open: "(",
+            close: ")",
+        };
+    }
+
+    function adjustTagWeight(value, selectionStart, selectionEnd, direction) {
+        const target = resolveTagWeightTarget(value, selectionStart, selectionEnd);
+        if (!target) return null;
+
+        const numericDirection = Number(direction);
+        if (!Number.isFinite(numericDirection) || numericDirection === 0) return null;
+
+        const nextWeight = Math.max(
+            0,
+            Math.round((target.weight + Math.sign(numericDirection) * 0.05) * 100) / 100,
+        );
+        if (Math.abs(nextWeight - target.weight) < 1e-9) return null;
+
+        const replacement = Math.abs(nextWeight - 1.0) < 1e-9
+            ? target.baseText
+            : `(${target.baseText}:${nextWeight.toFixed(2)})`;
+        const text = String(value ?? "");
+
+        return {
+            value: text.slice(0, target.start) + replacement + text.slice(target.end),
+            start: target.start,
+            end: target.start + replacement.length,
+            replacement,
+            weight: nextWeight,
+        };
+    }
+
     return {
         optionList,
         parsePatterns,
@@ -164,5 +264,7 @@
         sourcePenalty,
         separatorForInsertMode,
         phraseReplacementRange,
+        resolveTagWeightTarget,
+        adjustTagWeight,
     };
 });

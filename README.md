@@ -41,6 +41,13 @@ controls are intentionally hidden in the current release.
 現在、`Code` → `Download ZIP`、`Install from URL`、上記のv1.2.0 ZIPのいずれからも、
 Tag Cleaning Assistを含むv1.2.0を取得できます。ReleaseのZIPはv1.2.0固定です。
 
+### What's New
+
+- プロンプト内の通常タグで`Ctrl + ↑ / ↓`または`Ctrl + Wheel`を使い、weightを`0.05`単位で変更できます。
+- 選択範囲、またはcaret位置のカンマ区切りタグが対象です。`1.00`では通常タグへ戻り、下限は`0.00`です。
+- LoRA、LyCORIS、Embedding、Wildcard、Dynamic Prompt、`$...`構文、角括弧、IME入力中は変更しません。
+- この機能は現在の`main`で利用できます。タグ付きv1.2.0 Release ZIPは固定されており、この追加変更を含みません。
+
 > このプロジェクトは `sd-webui-tagcomplete-neo` を基盤としたフォークです。<br>
 > 候補ポップアップ、キーボード操作、カテゴリ色、LoRA・Embedding・Wildcard・Chantなど、
 > TagComplete Neoの操作感を維持しながら、Danbooru Tag JP Assistの辞書管理方式を統合しています。
@@ -646,6 +653,13 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 The current `Code` → `Download ZIP`, `Install from URL`, and the direct v1.2.0 ZIP above
 all provide v1.2.0 with Tag Cleaning Assist. The release ZIP remains fixed to v1.2.0.
+
+### What's New
+
+- Use `Ctrl + Up / Down` or `Ctrl + Wheel` on a normal prompt tag to adjust its weight in `0.05` steps.
+- The selected text, or the comma-delimited tag at the caret, is adjusted. A weight of `1.00` returns to plain text, with a lower limit of `0.00`.
+- LoRA, LyCORIS, Embedding, Wildcard, Dynamic Prompt, `$...` syntax, square brackets, and active IME composition are left unchanged.
+- This feature is available on the current `main`. The tagged v1.2.0 Release ZIP is fixed and does not include this later change.
 
 ### Project lineage
 

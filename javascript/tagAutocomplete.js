@@ -1840,6 +1840,100 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
     });
 }
 
+const tagWeightWheelLast = new WeakMap();
+const tagWeightComposingAreas = new WeakSet();
+
+function canApplyTagWeightShortcut(textArea) {
+    return isEnabled()
+        && document.activeElement === textArea
+        && !textArea.disabled
+        && !textArea.readOnly
+        && !tagWeightComposingAreas.has(textArea);
+}
+
+function applyTagWeightShortcut(textArea, direction) {
+    if (!canApplyTagWeightShortcut(textArea)) return false;
+
+    const core = globalThis.TACJPCore;
+    if (!core?.adjustTagWeight) return false;
+
+    const result = core.adjustTagWeight(
+        textArea.value,
+        textArea.selectionStart,
+        textArea.selectionEnd,
+        direction,
+    );
+    if (!result) return false;
+
+    textArea.value = result.value;
+    textArea.focus();
+    textArea.setSelectionRange(result.start, result.end);
+
+    if (typeof updateInput === "function") {
+        updateInput(textArea);
+    } else {
+        textArea.dispatchEvent(new Event("input", {bubbles: true}));
+    }
+
+    hideResults(textArea);
+    return true;
+}
+
+function handleTagWeightKeydown(textArea, event) {
+    if (
+        event.isComposing
+        || event.keyCode === 229
+        || !event.ctrlKey
+        || event.altKey
+        || event.shiftKey
+        || event.metaKey
+    ) {
+        return false;
+    }
+
+    let direction = 0;
+    if (event.key === "ArrowUp") direction = 1;
+    if (event.key === "ArrowDown") direction = -1;
+    if (!direction || !applyTagWeightShortcut(textArea, direction)) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+}
+
+function handleTagWeightWheel(textArea, event) {
+    if (
+        !event.ctrlKey
+        || event.altKey
+        || event.shiftKey
+        || event.metaKey
+        || event.deltaY === 0
+        || !canApplyTagWeightShortcut(textArea)
+    ) {
+        return false;
+    }
+
+    const core = globalThis.TACJPCore;
+    const target = core?.resolveTagWeightTarget?.(
+        textArea.value,
+        textArea.selectionStart,
+        textArea.selectionEnd,
+    );
+    if (!target) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const now = performance.now();
+    const last = tagWeightWheelLast.get(textArea);
+    if (last !== undefined && now - last < 70) return true;
+    tagWeightWheelLast.set(textArea, now);
+
+    const direction = event.deltaY < 0 ? 1 : -1;
+    applyTagWeightShortcut(textArea, direction);
+    return true;
+}
+
 function navigateInList(textArea, event) {
     // Return if the function is deactivated in the UI or the current model is excluded due to white/blacklist settings
     if (!isEnabled()) return;
@@ -2063,10 +2157,22 @@ function addAutocompleteToArea(area) {
                 hideResults(area);
         }, 400));
         // Add up and down arrow event listener
-        area.addEventListener('keydown', (e) => navigateInList(area, e));
+        area.addEventListener('keydown', (e) => {
+            if (handleTagWeightKeydown(area, e)) return;
+            navigateInList(area, e);
+        });
+        area.addEventListener(
+            'wheel',
+            (e) => handleTagWeightWheel(area, e),
+            {passive: false},
+        );
+        area.addEventListener('compositionstart', () => {
+            tagWeightComposingAreas.add(area);
+        });
         // CompositionEnd fires after the user has finished IME composing
         // We need to block hide here to prevent the enter key from insta-closing the results
         area.addEventListener('compositionend', () => {
+            tagWeightComposingAreas.delete(area);
             hideBlocked = true;
             setTimeout(() => { hideBlocked = false; }, 100);
         });
