@@ -178,6 +178,17 @@ const autocompleteCSS = `
 
 let tagIndex = new Map();
 let tagsLoaded = false;
+const autocompleteGenerations = new WeakMap();
+
+function nextAutocompleteGeneration(textArea) {
+    const generation = (autocompleteGenerations.get(textArea) || 0) + 1;
+    autocompleteGenerations.set(textArea, generation);
+    return generation;
+}
+
+function isAutocompleteGenerationCurrent(textArea, generation) {
+    return generation === null || autocompleteGenerations.get(textArea) === generation;
+}
 
 async function buildTagIndex() {
     tagIndex.clear();
@@ -587,6 +598,11 @@ function getTagRegex() {
         cachedTagRegex = new RegExp(`${POINTY_REGEX.source}|${COMPLETED_WILDCARD_REGEX.source.replaceAll("__", escapeRegExp(TAC_CFG.wcWrap))}|${STYLE_VAR_REGEX.source}|${NORMAL_TAG_REGEX.source}`, "g");
     }
     return cachedTagRegex;
+}
+
+function isSingleCharacterPunctuationQuery(value) {
+    const query = String(value ?? "").trim();
+    return query.length === 1 && !/[\p{L}\p{N}]/u.test(query);
 }
 
 function getUnderscoreExclusionPatterns() {
@@ -1455,7 +1471,9 @@ async function ensureTagsLoaded() {
     tagsLoaded = true;
 }
 
-async function autocomplete(textArea, prompt, fixedTag = null) {
+async function autocomplete(textArea, prompt, fixedTag = null, generation = null) {
+    if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
+
     // Lazy-load tags on first interaction so startup doesn't block the main thread.
     // If not loaded yet, show a brief loading indicator and retry automatically.
     if (!tagsLoaded) {
@@ -1469,8 +1487,10 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
             updateTacStatusDot('error');
             throw error;
         }
+        if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
+
         // Re-run now that tags are ready
-        return autocomplete(textArea, prompt, fixedTag);
+        return autocomplete(textArea, prompt, fixedTag, generation);
     }
 
     // Return if the function is deactivated in the UI
@@ -1537,6 +1557,8 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
 
     // Process all parsers
     let resultCandidates = (await processParsers(textArea, prompt))?.filter(x => x.length > 0);
+    if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
+
     const timedCandidate = resultCandidates?.find(
         candidate => candidate?._tacjpTimingSequence !== undefined,
     );
@@ -1551,10 +1573,20 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
         if (!(resultCandidates.length === 1 && results[0].type === ResultType.umiWildcard))
             results = results.sort(getSortFunction());
     }
+    // Single-character punctuation such as "/" or "\\" is too broad for the
+    // normal tag list and can surface ASCII/emoticon tags after typing has ended.
+    // Dedicated parsers still get first chance to handle their own trigger syntax.
+    const suppressNormalTagSearch = isSingleCharacterPunctuationQuery(tagword);
+    if (suppressNormalTagSearch && (!resultCandidates || resultCandidates.length === 0)) {
+        hideResults(textArea);
+        return;
+    }
+
     // Else search the normal tag list
-    if (!resultCandidates || resultCandidates.length === 0
+    if (!suppressNormalTagSearch && (
+        !resultCandidates || resultCandidates.length === 0
         || (TAC_CFG.includeEmbeddingsInNormalResults && !(tagword.startsWith("<") || tagword.startsWith("*<")))
-    ) {
+    )) {
         normalTags = true;
         resultCountBeforeNormalTags = results.length;
 
@@ -1823,8 +1855,12 @@ async function autocomplete(textArea, prompt, fixedTag = null) {
     }
     globalThis.TACJPFastSearchTiming?.mark("sort_done", timingSequence);
 
+    if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
+
     // Defer DOM rendering to next frame so input stays responsive
     requestAnimationFrame(() => {
+        if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
+
         addResultsToList(textArea, results, tagword, true, timingSequence);
         showResults(textArea);
         globalThis.TACJPFastSearchTiming?.mark("dom_done", timingSequence);
@@ -2100,9 +2136,9 @@ function addAutocompleteToArea(area) {
 
         // Debounced handlers per textarea to avoid shared timeout interference
         const autocompleteDelay = Math.min(TAC_CFG.delayTime, 50);
-        const debouncedAutocomplete = debounce(() => {
+        const debouncedAutocomplete = debounce((generation) => {
             globalThis.TACJPFastSearchTiming?.mark("search_start");
-            return autocomplete(area, area.value);
+            return autocomplete(area, area.value, null, generation);
         }, autocompleteDelay, {
             scheduled: timing => {
                 globalThis.TACJPFastSearchTiming?.debounceScheduled(timing);
@@ -2119,6 +2155,7 @@ function addAutocompleteToArea(area) {
             // Cancel autocomplete itself if the event has no inputType (e.g. because it was triggered by the updateInput() function)
             if (!e.inputType && !tacSelfTrigger) return;
             tacSelfTrigger = false;
+            const generation = nextAutocompleteGeneration(area);
             globalThis.TACJPFastSearchTiming?.input();
             if (globalThis.TACJPFastSearchTiming?.enabled()) {
                 queueMicrotask(() => {
@@ -2143,16 +2180,17 @@ function addAutocompleteToArea(area) {
             // enough that this doesn't cause noticeable lag on modern devices.
             if (!isDelete) {
                 debouncedUpdateRuby();
-                await debouncedAutocomplete();
+                await debouncedAutocomplete(generation);
             } else {
                 globalThis.TACJPFastSearchTiming?.mark("debounce_end");
                 globalThis.TACJPFastSearchTiming?.mark("search_start");
-                await autocomplete(area, area.value);
+                await autocomplete(area, area.value, null, generation);
             }
             checkKeywordInsertionUndo(area, e);
         });
         // Add focusout event listener
         area.addEventListener('focusout', debounce(() => {
+            nextAutocompleteGeneration(area);
             if (!hideBlocked)
                 hideResults(area);
         }, 400));
