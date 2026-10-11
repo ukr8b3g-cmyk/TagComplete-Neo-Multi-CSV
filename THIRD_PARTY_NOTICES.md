@@ -10,6 +10,11 @@ This project is a fork derived from:
 The upstream source code is distributed under the MIT License. The original
 copyright and license notice are retained in `LICENSE`.
 
+Embedding discovery compatibility fixes are adapted from Eduardo Abreu's
+`sd-webui-tagcomplete-neo` commit
+[`79ba7b1`](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo/commit/79ba7b1),
+under the same MIT license. Multi-CSV's classic Forge/reForge fallback is retained.
+
 The bundled `tags/tag_files/danbooru_2025.csv` and
 `tags/tag_files/e621.csv` files are copied from the TagComplete Neo repository.
 Their database contents can be subject to the terms of the respective source
