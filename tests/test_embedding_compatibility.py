@@ -102,16 +102,24 @@ class EmbeddingCompatibilityTests(unittest.TestCase):
 
     def test_folder_fallback_accepts_safetensors_and_case_insensitive_extensions(self):
         for name in ("nested/safe.v1.safetensors", "upper.SAFETENSORS", "legacy.PT", "normal.pt",
-                     "image.png", "binary.bin", "picture.webp", "picture.jxl", "picture.avif"):
+                     "image.png", "binary.bin", "picture_webp.webp", "picture_jxl.jxl", "picture_avif.avif"):
             self.file(name)
         self.file("empty.safetensors", b"")
         self.file("unrelated.txt")
         (self.root / "directory.safetensors").mkdir()
         rows, warning = self.export()
         self.assertEqual({row[0] for row in rows}, {
-            "nested/safe.v1", "upper", "legacy", "normal", "image", "binary", "picture"})
+            "nested/safe.v1", "upper", "legacy", "normal", "image", "binary",
+            "picture_webp", "picture_jxl", "picture_avif"})
         self.assertTrue(all(len(row) == 2 and row[1] == "" for row in rows))
         self.assertEqual(warning, "")
+
+    def test_folder_scan_error_warns_and_exports_an_empty_fallback(self):
+        with patch.object(Path, "rglob", side_effect=OSError("synthetic scan failure")):
+            rows, warning = self.export()
+        self.assertEqual(rows, [])
+        self.assertIn("Error scanning embeddings folder", warning)
+        self.assertIn("synthetic scan failure", warning)
 
     def test_known_registry_versions_and_loaded_precedence_are_preserved(self):
         make = lambda shape: SimpleNamespace(filename=None, shape=shape)
