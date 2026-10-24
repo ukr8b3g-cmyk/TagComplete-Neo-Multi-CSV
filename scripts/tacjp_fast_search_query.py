@@ -458,7 +458,7 @@ class FastSearchQueryMixin:
             not candidate_set_is_complete
             and not count_short_complete
             and (
-                candidate_sort_mode == "Count"
+                candidate_sort_mode in {"Count", "Legacy"}
                 or len(scored) < limit
             )
             and len(seen_ids) < len(rows)
@@ -494,7 +494,7 @@ class FastSearchQueryMixin:
                 row[1],
                 row[2],
                 row[3] if request.search_aliases else "",
-                row[4] if request.search_translations else "",
+                row[4],
                 _decode_code(
                     _CODE_TO_SOURCE,
                     int(row[5]),

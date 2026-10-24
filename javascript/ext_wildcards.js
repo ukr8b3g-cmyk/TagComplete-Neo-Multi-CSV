@@ -28,7 +28,7 @@ class WildcardParser extends BaseTagParser {
 
             // YAML wildcards are already loaded as json, so we can get the values directly.
             // basePath is the name of the file in this case, and fileName the key
-            if (basePath.endsWith(".yaml")) {
+            if (/\.ya?ml$/i.test(basePath)) {
                 const getDescendantProp = (obj, desc) => {
                     const arr = desc.split("/");
                     while (arr.length) {
@@ -81,7 +81,7 @@ class WildcardFileParser extends BaseTagParser {
             if (alreadyAdded.has(wcFile[1])) return;
 
             let result = null;
-            if (wcFile[0].endsWith(".yaml")) {
+            if (/\.ya?ml$/i.test(wcFile[0])) {
                 result = new AutocompleteResult(wcFile[1].trim(), ResultType.yamlWildcard);
                 result.meta = "YAML wildcard collection";
             } else {
