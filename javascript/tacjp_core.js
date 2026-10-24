@@ -154,6 +154,10 @@
         return null;
     }
 
+    const TAG_WEIGHT_MIN = -20;
+    const TAG_WEIGHT_MAX = 10;
+    const TAG_WEIGHT_KEY_STEP = 0.05;
+
     function resolveTagWeightTarget(value, selectionStart, selectionEnd) {
         const text = String(value ?? "");
         let start = Math.max(0, Math.min(Number(selectionStart) || 0, text.length));
@@ -227,16 +231,27 @@
         };
     }
 
-    function adjustTagWeight(value, selectionStart, selectionEnd, direction) {
+    function adjustTagWeight(
+        value,
+        selectionStart,
+        selectionEnd,
+        direction,
+        step = TAG_WEIGHT_KEY_STEP,
+    ) {
         const target = resolveTagWeightTarget(value, selectionStart, selectionEnd);
         if (!target) return null;
 
         const numericDirection = Number(direction);
         if (!Number.isFinite(numericDirection) || numericDirection === 0) return null;
+        const numericStep = Math.abs(Number(step));
+        if (!Number.isFinite(numericStep) || numericStep === 0) return null;
 
-        const nextWeight = Math.max(
-            0,
-            Math.round((target.weight + Math.sign(numericDirection) * 0.05) * 100) / 100,
+        const nextWeight = Math.min(
+            TAG_WEIGHT_MAX,
+            Math.max(
+                TAG_WEIGHT_MIN,
+                Math.round((target.weight + Math.sign(numericDirection) * numericStep) * 100) / 100,
+            ),
         );
         if (Math.abs(nextWeight - target.weight) < 1e-9) return null;
 

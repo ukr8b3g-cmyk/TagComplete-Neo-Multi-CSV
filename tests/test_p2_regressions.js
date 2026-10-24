@@ -146,6 +146,53 @@ async function mainGenerationTests() {
     assert.deepEqual(state.shown, []);
 }
 
+async function debounceDeletionTests() {
+    for (const inputType of ["deleteContentBackward", "deleteContentForward"]) {
+        for (const pendingAt of ["parser", "frequency", "frame"]) {
+            const {context, state} = contextForAutocomplete();
+            const timers = new Map(), handlers = {};
+            let timerId = 0, release;
+            Object.assign(context, {
+                setTimeout(fn) {timers.set(++timerId, fn); return timerId;},
+                clearTimeout(id) {timers.delete(id);},
+                performance: {now: () => 0},
+                createResultsDiv: () => ({}), updateRuby() {}, checkKeywordInsertionUndo() {},
+                tagWeightComposingAreas: new WeakSet(), tacSelfTrigger: false,
+            });
+            context.TAC_CFG.activeIn = {txt2img: true, img2img: true, negativePrompts: true, thirdParty: true};
+            context.TAC_CFG.delayTime = 50;
+            const area = {value: "longs", selectionStart: 5,
+                classList: {contains: () => false, add() {}}, parentNode: {insertBefore() {}},
+                addEventListener(name, handler) {handlers[name] = handler;}};
+            const start = utils.indexOf("const debounce =");
+            vm.runInNewContext(utils.slice(start, utils.indexOf("\n// Difference", start))
+                + "\n" + func(source, "addAutocompleteToArea"), context);
+            context.addAutocompleteToArea(area);
+            const candidate = {text: "long_hair", type: 1, sourceType: "tag", count: 1};
+            const response = new Promise(resolve => {release = resolve;});
+            context.processParsers = async () => [[candidate]];
+            if (pendingAt === "parser") context.processParsers = () => response;
+            if (pendingAt === "frequency") {
+                context.TAC_CFG.frequencySort = true;
+                context.getUseCounts = () => response;
+            }
+            void handlers.input({inputType: "insertText"});
+            area.value = "long"; area.selectionStart = 4;
+            const deletion = handlers.input({inputType});
+            await new Promise(resolve => setImmediate(resolve));
+            // Ruby's separate timer remains; the queued autocomplete must be cancelled.
+            const queuedTimers = timers.size;
+            for (const callback of timers.values()) callback();
+            timers.clear();
+            release(pendingAt === "parser" ? [[candidate]] : []);
+            await deletion; state.flush();
+            assert.equal(state.visible, true, `${inputType}/${pendingAt}`);
+            assert.deepEqual(state.shown, ["long_hair"], `${inputType}/${pendingAt}`);
+            assert.equal(queuedTimers, 1, `${inputType}/${pendingAt}: queued search remains`);
+        }
+    }
+}
+
 async function wildcardTests() {
     const context = {
         TAC_CFG: {useWildcards: true, wcWrap: "__", sortWildcardResults: false},
@@ -188,6 +235,7 @@ async function wildcardTests() {
     const failures = [];
     for (const [name, test] of [["punctuation and stale responses", punctuationTests],
         ["main input generations and punctuation", mainGenerationTests],
+        ["queued typing followed by Backspace/Delete", debounceDeletionTests],
         ["YML/YAML and text wildcards", wildcardTests]]) {
         try {await test(); console.log(`${name}: passed`);}
         catch (error) {failures.push(name); console.error(`${name}:`, error);}
