@@ -1881,6 +1881,8 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
 
 const tagWeightWheelLast = new WeakMap();
 const tagWeightComposingAreas = new WeakSet();
+const TAG_WEIGHT_KEY_STEP = 0.05;
+const TAG_WEIGHT_WHEEL_STEP = 0.1;
 
 function canApplyTagWeightShortcut(textArea) {
     return isEnabled()
@@ -1890,18 +1892,22 @@ function canApplyTagWeightShortcut(textArea) {
         && !tagWeightComposingAreas.has(textArea);
 }
 
-function applyTagWeightShortcut(textArea, direction) {
+function getTagWeightShortcutResult(textArea, direction, step) {
     if (!canApplyTagWeightShortcut(textArea)) return false;
 
     const core = globalThis.TACJPCore;
     if (!core?.adjustTagWeight) return false;
 
-    const result = core.adjustTagWeight(
+    return core.adjustTagWeight(
         textArea.value,
         textArea.selectionStart,
         textArea.selectionEnd,
         direction,
+        step,
     );
+}
+
+function applyTagWeightShortcut(textArea, result) {
     if (!result) return false;
 
     textArea.value = result.value;
@@ -1933,7 +1939,10 @@ function handleTagWeightKeydown(textArea, event) {
     let direction = 0;
     if (event.key === "ArrowUp") direction = 1;
     if (event.key === "ArrowDown") direction = -1;
-    if (!direction || !applyTagWeightShortcut(textArea, direction)) return false;
+    const result = direction
+        ? getTagWeightShortcutResult(textArea, direction, TAG_WEIGHT_KEY_STEP)
+        : null;
+    if (!result || !applyTagWeightShortcut(textArea, result)) return false;
 
     event.preventDefault();
     event.stopPropagation();
@@ -1952,13 +1961,13 @@ function handleTagWeightWheel(textArea, event) {
         return false;
     }
 
-    const core = globalThis.TACJPCore;
-    const target = core?.resolveTagWeightTarget?.(
-        textArea.value,
-        textArea.selectionStart,
-        textArea.selectionEnd,
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const result = getTagWeightShortcutResult(
+        textArea,
+        direction,
+        TAG_WEIGHT_WHEEL_STEP,
     );
-    if (!target) return false;
+    if (!result) return false;
 
     event.preventDefault();
     event.stopPropagation();
@@ -1968,9 +1977,7 @@ function handleTagWeightWheel(textArea, event) {
     if (last !== undefined && now - last < 70) return true;
     tagWeightWheelLast.set(textArea, now);
 
-    const direction = event.deltaY < 0 ? 1 : -1;
-    applyTagWeightShortcut(textArea, direction);
-    return true;
+    return applyTagWeightShortcut(textArea, result);
 }
 
 function navigateInList(textArea, event) {
@@ -2432,4 +2439,3 @@ onUiUpdate(async () => {
     await setup();
     tacLoading = false;
 });
-
