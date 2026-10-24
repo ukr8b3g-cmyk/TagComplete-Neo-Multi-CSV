@@ -1493,13 +1493,22 @@ def api_tac(_: gr.Blocks, app: FastAPI):
             return Response(status_code=404)
 
         try:
-            base = Path(basepath).expanduser().resolve()
+            base = (FILE_DIR / Path(basepath).expanduser()).resolve()
+            allowed_roots = {path.resolve() for path in [WILDCARD_PATH, *WILDCARD_EXT_PATHS]}
+            if base not in allowed_roots:
+                return Response(status_code=403)
             if not base.is_dir():
                 return Response(status_code=404)
+            if (Path(filename).anchor
+                    or (sys.platform == "win32" and ":" in filename)
+                    or Path(filename).suffix.lower() != ".txt"):
+                return Response(status_code=403)
             wildcard_path = (base / filename).resolve()
             try:
                 wildcard_path.relative_to(base)
             except ValueError:
+                return Response(status_code=403)
+            if wildcard_path.suffix.lower() != ".txt":
                 return Response(status_code=403)
             if wildcard_path.is_file():
                 return FileResponse(wildcard_path)
@@ -1526,8 +1535,6 @@ def api_tac(_: gr.Blocks, app: FastAPI):
             try:
                 if get:
                     ret = func()
-                    if isinstance(ret, list):
-                        ret = [{"name": t[0], "type": t[1], "count": t[2], "lastUseDate": t[3]} for t in ret]
                     return JSONResponse({"result": ret})
                 else:
                     func()

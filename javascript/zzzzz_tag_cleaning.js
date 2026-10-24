@@ -2,6 +2,7 @@
     "use strict";
 
     const cache = new Map();
+    const LOOKUP_BATCH_SIZE = 250;
     let databaseId = "";
     let installed = false;
     let warnedMissingDatabase = false;
@@ -94,37 +95,41 @@
         }
         if (unique.length === 0) return;
 
-        const response = await fetch("tacjp/v1/cleaning/lookup", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                items: unique.map(item => ({tag: item.tag, category: item.category})),
-            }),
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        const data = await response.json();
-        if (!data?.enabled) return;
-        if (!data?.ready) {
-            if (!warnedMissingDatabase) {
-                warnedMissingDatabase = true;
-                console.info(
-                    "[TagComplete Neo Multi-CSV] Tag Cleaning is enabled but its SQLite "
-                    + "database is not ready. Use Settings > Tag Autocomplete / Multi-CSV "
-                    + "> Tag Cleaning database update."
-                );
+        // Match CleaningLookupBody's per-request limit without dropping candidates.
+        for (let start = 0; start < unique.length; start += LOOKUP_BATCH_SIZE) {
+            const batch = unique.slice(start, start + LOOKUP_BATCH_SIZE);
+            const response = await fetch("tacjp/v1/cleaning/lookup", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    items: batch.map(item => ({tag: item.tag, category: item.category})),
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            return;
+            const data = await response.json();
+            if (!data?.enabled) return;
+            if (!data?.ready) {
+                if (!warnedMissingDatabase) {
+                    warnedMissingDatabase = true;
+                    console.info(
+                        "[TagComplete Neo Multi-CSV] Tag Cleaning is enabled but its SQLite "
+                        + "database is not ready. Use Settings > Tag Autocomplete / Multi-CSV "
+                        + "> Tag Cleaning database update."
+                    );
+                }
+                return;
+            }
+            const nextDatabaseId = String(data.database_id || "");
+            if (databaseId && nextDatabaseId && nextDatabaseId !== databaseId) cache.clear();
+            if (nextDatabaseId) databaseId = nextDatabaseId;
+            const rows = Array.isArray(data.results) ? data.results : [];
+            rows.forEach((row, index) => {
+                const key = batch[index]?.key;
+                if (key) cache.set(key, row?.match || null);
+            });
         }
-        const nextDatabaseId = String(data.database_id || "");
-        if (databaseId && nextDatabaseId && nextDatabaseId !== databaseId) cache.clear();
-        if (nextDatabaseId) databaseId = nextDatabaseId;
-        const rows = Array.isArray(data.results) ? data.results : [];
-        rows.forEach((row, index) => {
-            const key = unique[index]?.key;
-            if (key) cache.set(key, row?.match || null);
-        });
     }
 
     function clearAnnotation(li) {

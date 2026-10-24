@@ -1353,14 +1353,14 @@ function updateRuby(textArea, prompt) {
 
         const translation = translations?.get(tag) || translations?.get(unsanitizedTag); 
 
-        let escapedTag = escapeRegExp(tag);
+        let escapedTag = escapeRegExp(escapeHTML(tag));
         return { tag, escapedTag, translation };
     }
 
     const replaceOccurences = (text, tuple) => {
         let { tag, escapedTag, translation } = tuple;
         let searchRegex = new RegExp(`(?<!<ruby>)(?:\\b)${escapedTag}(?:\\b|$|(?=[,|: \\t\\n\\r]))(?!<rt>)`, "g");
-        return text.replaceAll(searchRegex, `<ruby>${escapeHTML(tag)}<rt>${translation}</rt></ruby>`);
+        return text.replaceAll(searchRegex, () => `<ruby>${escapeHTML(tag)}<rt>${escapeHTML(translation)}</rt></ruby>`);
     }
 
     let html = escapeHTML(prompt);
@@ -1376,7 +1376,7 @@ function updateRuby(textArea, prompt) {
             // Return if there is only one word
             if (subTags.length === 1) return;
 
-            let subHtml = tag.replaceAll("$", "\\(").replaceAll("%", "\\)");
+            let subHtml = escapeHTML(tag.replaceAll("$", "\\(").replaceAll("%", "\\)"));
 
             let translateNgram = (windows) => {
                 windows.forEach(window => {
@@ -1396,10 +1396,10 @@ function updateRuby(textArea, prompt) {
             translateNgram(toNgrams(subTags, 2));
             translateNgram(toNgrams(subTags, 1));
 
-            let escapedTag = escapeRegExp(tuple.tag);
+            let escapedTag = escapeRegExp(escapeHTML(tuple.tag));
 
             let searchRegex = new RegExp(`(?<!<ruby>)(?:\\b)${escapedTag}(?:\\b|$|(?=[,|: \\t\\n\\r]))(?!<rt>)`, "g");
-            html = html.replaceAll(searchRegex, subHtml);
+            html = html.replaceAll(searchRegex, () => subHtml);
         }
     });
 
@@ -1472,6 +1472,7 @@ async function ensureTagsLoaded() {
 }
 
 async function autocomplete(textArea, prompt, fixedTag = null, generation = null) {
+    if (generation === null) generation = nextAutocompleteGeneration(textArea);
     if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
 
     // Lazy-load tags on first interaction so startup doesn't block the main thread.
@@ -1510,7 +1511,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         let weightedTags = [...prompt.matchAll(WEIGHT_REGEX)]
             .map(match => match[1])
             .sort((a, b) => a.length - b.length);
-        let tags = [...prompt.match(getTagRegex())].sort((a, b) => a.length - b.length);
+        let tags = [...(prompt.match(getTagRegex()) || [])].sort((a, b) => a.length - b.length);
         
         if (weightedTags !== null && tags !== null) {
             const weightedSet = new Set(weightedTags);
@@ -1650,6 +1651,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         let tagsToSearch = allTags;
         if (
             TAC_CFG.candidateSortMode !== "Count"
+            && TAC_CFG.candidateSortMode !== "Legacy"
             && TAC_CFG.useIndexedSearch
             && queryNormalized.length >= 3
             && tagIndex.size > 0
@@ -1789,6 +1791,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         // Request use counts from the DB
         const names = TAC_CFG.frequencyIncludeAlias ? tagNames.concat(aliasNames) : tagNames;
         const counts = await getUseCounts(names, types, isNegative) || [];
+        if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
 
         // Pre-calculate weights to prevent duplicate work
         const resultBiasMap = new Map();
@@ -2428,3 +2431,4 @@ onUiUpdate(async () => {
     await setup();
     tacLoading = false;
 });
+

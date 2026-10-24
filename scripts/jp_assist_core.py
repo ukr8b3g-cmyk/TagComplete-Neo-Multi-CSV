@@ -4,6 +4,7 @@ The module intentionally avoids WebUI imports so the merge and preset logic can 
 unit-tested outside Forge. WebUI integration lives in tag_autocomplete_helper.py.
 """
 
+import codecs
 import csv
 import fnmatch
 import ipaddress
@@ -926,12 +927,19 @@ class RemoteUpdater:
             raise ValueError("Downloaded file is empty")
         with path.open("rb") as handle:
             sample = handle.read(65536)
-        if b"\0" in sample:
-            raise ValueError("Downloaded file is not a text CSV")
-        try:
-            text = sample.decode("utf-8-sig")
-        except UnicodeDecodeError as exc:
-            raise ValueError("Downloaded CSV is not UTF-8") from exc
+            if b"\0" in sample:
+                raise ValueError("Downloaded file is not a text CSV")
+            try:
+                decoder = codecs.getincrementaldecoder("utf-8-sig")()
+                text = decoder.decode(sample)
+                # Complete only a character split by the byte sample boundary.
+                while decoder.getstate()[0]:
+                    extra = handle.read(1)
+                    if not extra:
+                        raise ValueError("Downloaded CSV is not UTF-8")
+                    text += decoder.decode(extra)
+            except UnicodeDecodeError as exc:
+                raise ValueError("Downloaded CSV is not UTF-8") from exc
         prefix = text.lstrip().lower()
         if prefix.startswith(("<!doctype html", "<html", "<?xml")):
             raise ValueError("Downloaded content is not a CSV")

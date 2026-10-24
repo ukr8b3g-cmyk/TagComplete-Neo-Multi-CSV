@@ -199,3 +199,88 @@ def test_valid_download_atomically_replaces_target(tmp_path: Path, monkeypatch) 
     assert target.read_bytes() == VALID_CSV
     assert any(source.name == "remote.csv.download" and destination == target for source, destination in replace_calls)
     assert not target.with_suffix(".csv.download").exists()
+
+
+UTF8_BOUNDARIES = [
+    (character, prefix_bytes)
+    for character in ("é", "髪", "😀")
+    for prefix_bytes in range(1, len(character.encode("utf-8")))
+]
+
+
+def boundary_csv(character: str, prefix_bytes: int, bom: bool = False) -> bytes:
+    header = (b"\xef\xbb\xbf" if bom else b"") + b"tag,category,count\n"
+    padding = b"x" * (65536 - prefix_bytes - len(header))
+    return header + padding + character.encode("utf-8") + b",0,1\n"
+
+
+@pytest.mark.parametrize("character,prefix_bytes", UTF8_BOUNDARIES)
+@pytest.mark.parametrize("bom", (False, True))
+def test_update_accepts_utf8_character_crossing_sample_boundary(
+    tmp_path: Path, character: str, prefix_bytes: int, bom: bool,
+) -> None:
+    payload = boundary_csv(character, prefix_bytes, bom)
+    payload.decode("utf-8-sig")  # The entire input is valid, including the boundary.
+    updater = RemoteUpdater(DataStore(tmp_path / "tags"))
+    result = updater.update(ValidSession(payload), PUBLIC_URL, "remote.csv")
+    target = updater.data_store.tag_dir / "remote.csv"
+    assert result["updated"] is True, result
+    assert target.read_bytes() == payload
+    assert result["meta"]["local_size"] == len(payload)
+    assert not target.with_suffix(".csv.download").exists()
+
+
+@pytest.mark.parametrize("character,prefix_bytes", UTF8_BOUNDARIES)
+@pytest.mark.parametrize("invalid_continuation", (False, True))
+def test_invalid_utf8_boundary_preserves_target_metadata_and_cache(
+    tmp_path: Path, monkeypatch, character: str, prefix_bytes: int,
+    invalid_continuation: bool,
+) -> None:
+    payload = boundary_csv(character, prefix_bytes)[:65536]
+    if invalid_continuation:
+        payload += b"X,0,1\n"
+    with pytest.raises(UnicodeDecodeError):
+        payload.decode("utf-8-sig")
+    store = DataStore(tmp_path / "tags")
+    target = store.tag_dir / "remote.csv"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(VALID_CSV)
+    updater = RemoteUpdater(store)
+    updater.save_meta({"etag": '"previous"', "url": PUBLIC_URL, "target": target.name})
+    metadata = updater.meta_path.read_bytes()
+    cache_clears = []
+    monkeypatch.setattr(store, "clear_cache", lambda: cache_clears.append(True))
+    result = updater.update(ValidSession(payload), PUBLIC_URL, target.name)
+    assert result["updated"] is False
+    assert "not UTF-8" in result["error"]
+    assert target.read_bytes() == VALID_CSV
+    assert updater.meta_path.read_bytes() == metadata
+    assert cache_clears == []
+    assert not target.with_suffix(".csv.download").exists()
+
+
+@pytest.mark.parametrize(
+    "payload,error",
+    [
+        (b"", "empty"),
+        (b"tag,category,count\nbad\x00,0,1\n", "not a text CSV"),
+        (b"tag,category,count\nbad\xff,0,1\n", "not UTF-8"),
+        (b"tag,category,count\nbad\xc3", "not UTF-8"),
+        (b"tag,category,count\nbad\xe9\xab", "not UTF-8"),
+        (b"tag,category,count\nbad\xf0\x9f\x98", "not UTF-8"),
+        (b"\xef", "not UTF-8"),
+        (b"\xef\xbb", "not UTF-8"),
+        (b"\xef\xbb\xbf", "no usable rows"),
+        (b"\xef\xbb\xbf<!doctype html><html></html>", "not a CSV"),
+        (b"<html>error</html>", "not a CSV"),
+        (b"<?xml version='1.0'?>", "not a CSV"),
+        (b"  \n\t\n", "no usable rows"),
+    ],
+)
+def test_sample_validation_keeps_rejecting_invalid_payloads(
+    tmp_path: Path, payload: bytes, error: str,
+) -> None:
+    path = tmp_path / "download.csv"
+    path.write_bytes(payload)
+    with pytest.raises(ValueError, match=error):
+        RemoteUpdater._validate_download(path)
