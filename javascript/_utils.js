@@ -153,7 +153,7 @@ async function refreshStyleNamesIfChanged() {
 // Debounce function to prevent spamming the autocomplete function
 const debounce = (func, wait = 300, observer = null) => {
     let timeout;
-    return function (...args) {
+    const debounced = function (...args) {
         if (timeout) clearTimeout(timeout);
         return new Promise((resolve) => {
             const registeredAt = performance.now();
@@ -170,6 +170,8 @@ const debounce = (func, wait = 300, observer = null) => {
             }, wait);
         });
     };
+    debounced.cancel = () => clearTimeout(timeout);
+    return debounced;
 }
 
 // Difference function to fix duplicates not being seen as changes in normal filter

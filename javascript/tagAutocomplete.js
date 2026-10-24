@@ -2185,6 +2185,7 @@ function addAutocompleteToArea(area) {
                 debouncedUpdateRuby();
                 await debouncedAutocomplete(generation);
             } else {
+                debouncedAutocomplete.cancel();
                 globalThis.TACJPFastSearchTiming?.mark("debounce_end");
                 globalThis.TACJPFastSearchTiming?.mark("search_start");
                 await autocomplete(area, area.value, null, generation);
