@@ -51,6 +51,8 @@ function contextForAutocomplete(rows = []) {
     const end = source.indexOf("\nconst tagWeightWheelLast", start);
     vm.runInNewContext([
         func(utils, "escapeRegExp"), func(utils, "difference"),
+        source.slice(source.indexOf("const autocompleteGenerations ="),
+            source.indexOf("async function buildTagIndex(")),
         source.slice(regexStart, regexEnd), source.slice(adjacentStart, end),
     ].join("\n"), context);
     state.flush = () => {while (frames.length) frames.shift()();};
@@ -119,6 +121,31 @@ async function punctuationTests() {
     }
 }
 
+async function mainGenerationTests() {
+    for (const prompt of ["/", "\\"]) {
+        const {context, state} = contextForAutocomplete();
+        await context.autocomplete({value: prompt, selectionStart: 1}, prompt);
+        state.flush();
+        assert.equal(state.visible, false, prompt);
+        assert.deepEqual(state.shown, []);
+    }
+    const {context, state} = contextForAutocomplete();
+    const area = {value: "long", selectionStart: 4};
+    let release;
+    context.processParsers = () => new Promise(resolve => {release = resolve;});
+    const pending = context.autocomplete(area, "long");
+    await new Promise(resolve => setImmediate(resolve));
+    // Input/focusout invalidates the old response before the debounced call starts.
+    const generation = context.nextAutocompleteGeneration(area);
+    release([[{text: "long_hair", type: 1}]]);
+    await pending;
+    state.flush();
+    assert.deepEqual(state.shown, []);
+    const stale = context.autocomplete(area, "long", null, generation - 1);
+    await stale;
+    assert.deepEqual(state.shown, []);
+}
+
 async function wildcardTests() {
     const context = {
         TAC_CFG: {useWildcards: true, wcWrap: "__", sortWildcardResults: false},
@@ -160,6 +187,7 @@ async function wildcardTests() {
     }
     const failures = [];
     for (const [name, test] of [["punctuation and stale responses", punctuationTests],
+        ["main input generations and punctuation", mainGenerationTests],
         ["YML/YAML and text wildcards", wildcardTests]]) {
         try {await test(); console.log(`${name}: passed`);}
         catch (error) {failures.push(name); console.error(`${name}:`, error);}
