@@ -1,4 +1,15 @@
 <img width="1536" height="1024" alt="Clip_45" src="https://github.com/user-attachments/assets/cd6099a0-34a1-43d0-a7cb-669fdcbffe31" />
+
+## 検索件数と初期辞書 / Match counts and default dictionary
+
+候補一覧の上部に検索件数を固定表示します。例：temple：124件、件数制限時は124件中20件を表示。右端の投稿数とは別の情報です。旧検索APIで総数を得られない間は「取得○件（総数未取得）」と区別します。追加のON/OFF設定はなく、自動表示です。Python側の更新にはForgeの再起動が必要です。
+
+The candidate header shows total matches and, when limited, the available subset. Per-tag post counts remain separate. Older search APIs are labelled as retrieved counts with the total unavailable. The header is automatic, with no new on/off setting. Restart Forge after updating the Python search API.
+
+タグCSVの新規初期選択はtags_merged_dedup.csvのみです。追加辞書はJP Assistのタグファイル選択で指定できます。削除済みのdanbooru_tags.csv／danbooru_2025.csvが保存設定に残っている場合だけ統合CSVへ置換し、それ以外の選択・順序は維持します。
+
+New tag selections default to tags_merged_dedup.csv only. Choose additional dictionaries in JP Assist's tag-file selector. Saved references to missing retired Danbooru files migrate to the merged CSV; other choices and their order remain intact.
+
 <div align="center">
 
 # TagComplete Neo Multi-CSV

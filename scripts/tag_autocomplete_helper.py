@@ -589,7 +589,7 @@ def update_json_files(*args, **kwargs):
 def _default_tag_selection():
     names = [item.name for item in JP_DATA.list_tag_files()]
     preferred = [
-        name for name in ("tags_merged_dedup.csv", "natural_language_tags.csv")
+        name for name in ("tags_merged_dedup.csv",)
         if name in names
     ]
     if preferred:
@@ -612,15 +612,17 @@ def _migrate_legacy_danbooru_selection():
     """Replace the retired small Danbooru filename without changing other choices."""
 
     selected = shared.opts.data.get("tacjp_tagFiles")
-    if not isinstance(selected, list) or "danbooru_tags.csv" not in selected:
+    if not isinstance(selected, list) or not any(name in selected for name in ("danbooru_tags.csv", "danbooru_2025.csv")):
         return
-    if not (JP_DATA.tag_dir / "danbooru_2025.csv").is_file():
+    if not (JP_DATA.tag_dir / "tags_merged_dedup.csv").is_file():
         return
     migrated = []
     for name in selected:
-        replacement = "danbooru_2025.csv" if name == "danbooru_tags.csv" else name
+        replacement = "tags_merged_dedup.csv" if name in ("danbooru_tags.csv", "danbooru_2025.csv") and not (JP_DATA.tag_dir / name).is_file() else name
         if replacement not in migrated:
             migrated.append(replacement)
+    if migrated == selected:
+        return
     shared.opts.data["tacjp_tagFiles"] = migrated
     try:
         shared.opts.save(shared.config_filename)

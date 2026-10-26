@@ -263,6 +263,7 @@ class FastSearchQueryMixin:
             return {
                 "results": [],
                 "count": 0,
+                "matched_count": 0,
                 "cache": "none",
                 "build_ms": 0.0,
                 "original_build_ms": 0.0,
@@ -533,9 +534,32 @@ class FastSearchQueryMixin:
             2,
         )
         original_build_ms = index.get("build_ms", 0.0)
+        # Count merged rows once, independently of the top-k ranking shortcut.
+        # Normalized field groups preserve alias/translation switches and avoid
+        # counting a row twice when multiple fields contain the same query.
+        if blobs and isinstance(blobs[0], tuple) and "\x1f" not in query:
+            matched_count = sum(
+                query in tag_blob
+                or (request.search_aliases and query in alias_blob)
+                or (request.search_translations and query in translation_blob)
+                for tag_blob, alias_blob, translation_blob in blobs
+            )
+        elif field_groups is not None:
+            matched_count = sum(
+                query in tag_field
+                or (request.search_aliases and any(query in value for value in alias_fields))
+                or (request.search_translations and any(query in value for value in translation_fields))
+                for tag_field, alias_fields, translation_fields in field_groups
+            )
+        else:
+            matched_count = sum(
+                any(query in value for value in values)
+                for values in fields
+            ) if fields is not None else len(scored)
         return {
             "results": output,
             "count": len(output),
+            "matched_count": matched_count,
             "total": len(rows),
             "cache": cache_state,
             "build_ms": original_build_ms,

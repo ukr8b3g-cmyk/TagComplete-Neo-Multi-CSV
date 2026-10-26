@@ -62,6 +62,20 @@ const autocompleteCSS = `
     .autocompleteResultsList > li:nth-child(odd) {
         background-color: var(--results-bg-odd);
     }
+    .autocompleteHitCount {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 4px 10px;
+        min-height: 26px;
+        box-sizing: border-box;
+        background: var(--results-bg);
+        color: var(--results-neutral-text);
+        border-bottom: 1px solid var(--results-border-color);
+        font-size: 12px;
+        line-height: 18px;
+        overflow-wrap: anywhere;
+    }
     .autocompleteResultsList > li {
         list-style-type: none;
         padding: 10px;
@@ -469,7 +483,7 @@ async function syncOptions() {
 
     if (TAC_CFG && newCFG.maxResults !== TAC_CFG.maxResults) {
         gradioApp().querySelectorAll(".autocompleteResults").forEach(r => {
-            r.style.maxHeight = `${newCFG.maxResults * 50}px`;
+            r.style.maxHeight = `calc(${newCFG.maxResults * 50}px + 26px)`;
         });
     }
 
@@ -494,10 +508,15 @@ function createResultsDiv(textArea) {
 
     parentDiv.setAttribute("class", `autocompleteParent${typeClass}`);
 
-    resultsDiv.style.maxHeight = `${TAC_CFG.maxResults * 50}px`;
+    resultsDiv.style.maxHeight = `calc(${TAC_CFG.maxResults * 50}px + 26px)`;
     resultsDiv.setAttribute("class", `autocompleteResults${typeClass} notranslate`);
     resultsDiv.setAttribute("translate", "no");
     resultsList.setAttribute("class", "autocompleteResultsList");
+    const hitCount = document.createElement("div");
+    hitCount.className = "autocompleteHitCount";
+    hitCount.hidden = true;
+    hitCount.addEventListener('mousedown', event => {event.preventDefault(); event.stopPropagation();});
+    resultsDiv.appendChild(hitCount);
     resultsDiv.appendChild(resultsList);
 
     sideDiv.setAttribute("class", `autocompleteResults${typeClass} sideInfo`);
@@ -544,6 +563,8 @@ function showLoadingResults(textArea) {
     let resultsDiv = gradioApp().querySelector('.autocompleteResults' + textAreaId);
     let resultsList = resultsDiv?.querySelector('ul');
     if (!resultsList) return;
+    const hitCount = resultsDiv.querySelector('.autocompleteHitCount');
+    if (hitCount) {hitCount.hidden = true; hitCount.textContent = '';}
     resultsList.innerHTML = '<li style="padding:8px 12px;color:#9ca3af;font-style:italic;">Loading tags...</li>';
     showResults(textArea);
 }
@@ -922,7 +943,22 @@ async function insertTextAtCursor(textArea, result, tagword, tabCompletedWithout
     }
 }
 
-function addResultsToList(textArea, results, tagword, resetList, timingSequence = null) {
+function updateHitCount(resultDiv, query, total, available, exact = true) {
+    const header = resultDiv.querySelector('.autocompleteHitCount');
+    if (!header) return;
+    const ja = typeof tacJpLanguage === 'function'
+        ? tacJpLanguage() === 'ja'
+        : /^ja(?:-|$)/i.test(document.documentElement.lang || 'en');
+    const label = exact
+        ? (available < total
+            ? (ja ? `${total}件中${available}件を表示` : `${available} of ${total} matches`)
+            : (ja ? `${total}件` : `${total} matches`))
+        : (ja ? `取得${available}件（総数未取得）` : `${available} retrieved (total unavailable)`);
+    header.textContent = `${query}：${label}`;
+    header.hidden = false;
+}
+
+function addResultsToList(textArea, results, tagword, resetList, timingSequence = null, hitSummary = null) {
     let textAreaId = getTextAreaIdentifier(textArea);
     let resultDiv = gradioApp().querySelector('.autocompleteResults' + textAreaId);
     let resultsList = resultDiv.querySelector('ul');
@@ -932,6 +968,7 @@ function addResultsToList(textArea, results, tagword, resetList, timingSequence 
 
     // Reset list, selection and scrollTop since the list changed
     if (resetList) {
+        updateHitCount(resultDiv, tagword, hitSummary?.total ?? results.length, results.length, hitSummary?.exact ?? true);
         resultsList.innerHTML = "";
         selectedTag = null;
         oldSelectedTag = null;
@@ -1290,7 +1327,8 @@ async function updateSelectionStyle(textArea, newIndex, oldIndex, scroll = true)
         selected.classList.add('selected');
 
         // Set scrolltop to selected item
-        if (scroll) resultDiv.scrollTop = selected.offsetTop - resultDiv.offsetTop;
+        if (scroll) resultDiv.scrollTop = Math.max(0, selected.offsetTop - resultDiv.offsetTop
+            - (resultDiv.querySelector('.autocompleteHitCount')?.offsetHeight || 0));
     }
 
     // Show preview if enabled and the selected type supports it
@@ -1852,6 +1890,12 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         }
     }
 
+    const hitSummary = {total: results.length, exact: true};
+    for (const candidate of resultCandidates || []) {
+        if (candidate._tacjpHitCount === null) hitSummary.exact = false;
+        else if (Number.isSafeInteger(candidate._tacjpHitCount)) hitSummary.total += candidate._tacjpHitCount - candidate.length;
+    }
+
     // Slice if the user has set a max result count and we are not in a extra networks / wildcard list
     if (!TAC_CFG.showAllResults && normalTags) {
         results = results.slice(0, TAC_CFG.maxResults + resultCountBeforeNormalTags);
@@ -1864,7 +1908,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
     requestAnimationFrame(() => {
         if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
 
-        addResultsToList(textArea, results, tagword, true, timingSequence);
+        addResultsToList(textArea, results, tagword, true, timingSequence, hitSummary);
         showResults(textArea);
         globalThis.TACJPFastSearchTiming?.mark("dom_done", timingSequence);
         if (globalThis.TACJPFastSearchTiming?.enabled()) {

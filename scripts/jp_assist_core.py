@@ -621,8 +621,8 @@ class PresetStore:
     def default_presets(self) -> dict[str, dict[str, Any]]:
         tags = [info.name for info in self.data_store.list_tag_files()]
         translations = [info.name for info in self.data_store.list_translation_files()]
-        danbooru = self._pick(tags, "danbooru_2025", "danbooru.csv", "danbooru")
-        illustrious = self._pick(tags, "illustrious", "danbooru_2025", "danbooru_e621", "danbooru")
+        danbooru = self._pick(tags, "tags_merged_dedup", "danbooru_2025", "danbooru.csv", "danbooru")
+        illustrious = self._pick(tags, "tags_merged_dedup", "illustrious", "danbooru_2025", "danbooru_e621", "danbooru")
         natural = self._pick(tags, "natural_language", "englishdictionary", "english_dictionary", "natural")
         danbooru_tr = self._pick(translations, "merged_translations", "danbooru", "translation")
         natural_tr = self._pick(translations, "natural_language", "natural")

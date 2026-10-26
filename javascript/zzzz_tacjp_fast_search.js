@@ -535,6 +535,10 @@
                         output.push(result);
                     }
                     appendLocalExtraResults(output, body);
+                    Object.defineProperty(output, "_tacjpHitCount", {
+                        value: Number.isSafeInteger(data.matched_count) && data.matched_count >= data.results.length
+                            ? data.matched_count + output.length - data.results.length : null,
+                    });
                     timingState.mark("results_built", sequence);
                     Object.defineProperty(output, "_tacjpTimingSequence", {
                         value: sequence,

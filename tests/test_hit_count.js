@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync(require('node:path').join(__dirname,'../javascript/tagAutocomplete.js'),'utf8');
+const fn=source.slice(source.indexOf('function updateHitCount('),source.indexOf('function addResultsToList('));
+let language='ja';const header={hidden:true,textContent:''};
+const ctx=vm.createContext({tacJpLanguage:()=>language});vm.runInContext(fn,ctx);
+const div={querySelector:()=>header};
+ctx.updateHitCount(div,'temple',124,124);assert.equal(header.textContent,'temple：124件');assert.equal(header.hidden,false);
+ctx.updateHitCount(div,'temple',124,20);assert.equal(header.textContent,'temple：124件中20件を表示');
+language='en';ctx.updateHitCount(div,'temple',124,20);assert.equal(header.textContent,'temple：20 of 124 matches');
+ctx.updateHitCount(div,'temple',124,124);assert.equal(header.textContent,'temple：124 matches');
+ctx.updateHitCount(div,'<img src=x>',20,20,false);assert.equal(header.textContent,'<img src=x>：20 retrieved (total unavailable)');
+language='ja';ctx.updateHitCount(div,'temple',20,20,false);assert.equal(header.textContent,'temple：取得20件（総数未取得）');
+console.log('Hit-count labels: 6 cases passed');
