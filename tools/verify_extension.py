@@ -32,7 +32,7 @@ REQUIRED = [
     "javascript/zz_jpAssistUI.js",
     "scripts/jp_assist_core.py",
     "scripts/tag_autocomplete_helper.py",
-    "tags/tag_files/danbooru_2025.csv",
+    "tags/tag_files/tags_merged_dedup.csv",
     "tags/tag_files/e621.csv",
     "tags/tag_files/natural_language_tags.csv",
     "tags/tag_files/README.md",

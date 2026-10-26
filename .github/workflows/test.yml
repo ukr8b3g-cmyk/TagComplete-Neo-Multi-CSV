@@ -24,6 +24,13 @@ jobs:
       - name: Run Python tests
         run: python -m pytest -q
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify clean distribution
+        run: python tools/verify_extension.py
+
       - name: Compile Python sources
         run: python -m compileall -q scripts tests
 

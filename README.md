@@ -253,8 +253,7 @@ CSVはサブフォルダにも配置できます。設定画面には相対パ�
 | ファイル | 内容 | 主な用途 | 新規環境の初期選択 |
 |---|---|---|---|
 | `tags_merged_dedup.csv` | 重複除去済みDanbooru / e621統合辞書 | 汎用タグ補完（推奨） | ✓ |
-| `natural_language_tags.csv` | 自然言語辞書 | Hybrid・自然言語入力 | ✓ |
-| `danbooru_2025.csv` | Danbooruタグ辞書 | Danbooruのみを使う構成 | — |
+| `natural_language_tags.csv` | 自然言語辞書 | Hybrid・自然言語入力（必要時に追加選択） | — |
 | `e621.csv` | e621タグ辞書 | Furry・Anthro系 | — |
 | `anima_artists.csv` | Animaアーティスト辞書 | Animaアーティスト補完 | — |
 | `anima_characters.csv` | Animaキャラクター辞書 | Animaキャラクター補完 | — |
@@ -271,13 +270,13 @@ CSVはサブフォルダにも配置できます。設定画面には相対パ�
 > Animaを使用する場合は、必要に応じて`anima_artists.csv`と
 > `anima_characters.csv`を追加選択してください。
 
-`danbooru_2025.csv`と`e621.csv`は
+既定の`tags_merged_dedup.csv`は、
 [sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo)
-由来の個別辞書です。既定の`tags_merged_dedup.csv`は、それらを重複除去して
-統合した辞書です。
+由来のDanbooru / e621を重複除去して統合した辞書です。
+旧`danbooru_2025.csv`は同梱していません。個別の`e621.csv`は引き続き選択できます。
 
 > [!IMPORTANT]
-> **`tags_merged_dedup.csv`は、`danbooru_2025.csv`や`e621.csv`と同時に選択しないでください。**
+> **`tags_merged_dedup.csv`は、`e621.csv`などの統合元CSVと同時に選択しないでください。**
 > 重複データによりインデックス構築時間とメモリ使用量が増え、カテゴリ・件数・
 > ソース優先順位も分かりにくくなります。統合辞書か個別CSVの組み合わせの、
 > どちらか一方を使用してください。
@@ -806,8 +805,7 @@ selections.
 | File | Contents | Best for | New-install default |
 |---|---|---|---|
 | `tags_merged_dedup.csv` | Deduplicated Danbooru / e621 merged dictionary | General tag completion (recommended) | ✓ |
-| `natural_language_tags.csv` | Natural-language dictionary | Hybrid and natural-language input | ✓ |
-| `danbooru_2025.csv` | Danbooru tag dictionary | Danbooru-only setups | — |
+| `natural_language_tags.csv` | Natural-language dictionary | Hybrid and natural-language input (optional selection) | — |
 | `e621.csv` | e621 tag dictionary | Furry / anthro models | — |
 | `anima_artists.csv` | Anima artist dictionary | Anima artist completion | — |
 | `anima_characters.csv` | Anima character dictionary | Anima character completion | — |
@@ -823,13 +821,13 @@ selections.
 > presets are preserved, so selections can differ after an update. For Anima,
 > select `anima_artists.csv` and `anima_characters.csv` as needed.
 
-`danbooru_2025.csv` and `e621.csv` are individual dictionaries derived from
-[sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo).
-The default `tags_merged_dedup.csv` combines those sources after deduplication.
+The default `tags_merged_dedup.csv` combines Danbooru / e621 data derived from
+[sd-webui-tagcomplete-neo](https://github.com/eduardoabreu81/sd-webui-tagcomplete-neo) after deduplication.
+The retired `danbooru_2025.csv` is no longer bundled; the individual `e621.csv` remains available.
 
 > [!IMPORTANT]
-> **Do not select `tags_merged_dedup.csv` together with `danbooru_2025.csv`
-> or `e621.csv`.** Redundant data increases index build time and memory use and
+> **Do not select `tags_merged_dedup.csv` together with its source dictionaries,
+> such as `e621.csv`.** Redundant data increases index build time and memory use and
 > makes category, count, and source-priority resolution harder to understand.
 > Use either the merged dictionary or the separate source files.
 
