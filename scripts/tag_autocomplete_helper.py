@@ -872,7 +872,7 @@ def on_ui_settings():
         "tac_frequencyMinCount": shared.OptionInfo(3, "Minimum uses before frequency bias"),
         "tac_frequencyMaxAge": shared.OptionInfo(30, "Maximum age in days for frequency bias"),
         "tac_frequencyRecommendCap": shared.OptionInfo(10, "Maximum number of frequency recommendations"),
-        "tac_frequencyIncludeAlias": shared.OptionInfo(False, "Frequency sorting matches aliases"),
+        "tac_frequencyIncludeAlias": shared.OptionInfo(False, "Apply usage-frequency ranking to alias matches"),
 
         # Insertion
         "tac_replaceUnderscores": shared.OptionInfo(True, "Replace underscores with spaces on insertion"),

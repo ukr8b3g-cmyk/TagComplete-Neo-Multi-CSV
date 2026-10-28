@@ -2,6 +2,30 @@
     "use strict";
 
     const TAC_SETTING_HELP = {
+        tacjp_cleaningEnabled: {
+            ja: "補完候補に、Danbooruの補正データに基づく参考情報を追加します。初期値はOFFです。タグを自動削除・置換せず、通常の補完はそのまま使えます。",
+            en: "Adds reference indicators based on Danbooru correction data to autocomplete candidates. Default OFF. Does not automatically delete or replace tags; normal completion remains available.",
+        },
+        tacjp_cleaningShowWarnings: {
+            ja: "補正データで削除されることの多いタグに印を付けます。Danbooruで廃止されたタグという意味ではありません。",
+            en: "Marks tags frequently removed in this correction dataset. It does not mean that the Danbooru tag is deprecated.",
+        },
+        tacjp_cleaningShowSuggestions: {
+            ja: "同じ補正事例で一緒に追加されることの多いタグを参考表示します。候補を自動挿入・置換する機能ではありません。",
+            en: "Shows related tags frequently added in the same correction examples as reference hints. Does not automatically insert or replace tags.",
+        },
+        tacjp_cleaningSensitivity: {
+            ja: "参考情報を表示する条件を選びます。Conservativeは強い傾向に絞り、Balancedは標準、Broadは弱い傾向まで表示します。",
+            en: "Controls which correction signals are shown. Conservative shows stronger signals only, Balanced uses the standard thresholds, and Broad includes weaker signals.",
+        },
+        tacjp_cleaningStatus: {
+            ja: "補正情報データベースの準備状態を表示します。横の更新ボタンは状態表示を読み直すだけで、データベースをダウンロードしません。",
+            en: "Shows whether the correction database is ready. The adjacent refresh button only rereads its status; it does not download the database.",
+        },
+        tacjp_cleaningUpdate: {
+            ja: "横の更新ボタンから明示的に実行します。Hugging Faceから補正用Parquetを取得し、必要なら専用フォルダーへDuckDBを導入してSQLiteを作成します。作業用Parquetは処理後に削除します。タグCSVの更新とは別の操作です。",
+            en: "Run explicitly with the adjacent update button. Downloads correction Parquet data from Hugging Face, installs DuckDB in its dedicated folder if needed, and builds SQLite. Deletes the temporary Parquet afterward. Separate from updating tag CSVs.",
+        },
         tacjp_candidateSortMode: {
             ja: "候補の並び順を選びます。Neo互換は選択したCSVと各CSV内の登録順を基本にし、関連度優先は一致度・件数・名前で並べます。投稿数優先は通常タグだけを投稿数順にします。プロンプトモードのタグ／自然言語優先とは別の設定です。",
             en: "Chooses how tag candidates are ordered. Neo compatible preserves selected CSV order and each CSV's entry order; Relevance first uses match quality, count, and name. Count first orders normal tag entries by count only. This is separate from prompt mode's tag versus natural-language priority.",
@@ -147,8 +171,8 @@
             en: "Maximum number of candidates shown by frequency-based recommendations, including suggestions before typing.",
         },
         tac_frequencyIncludeAlias: {
-            ja: "Alias名で選択した場合も、元タグの使用回数として記録します。",
-            en: "Counts selections made through an alias toward the usage frequency of the underlying tag.",
+            ja: "別名（タグの言い換え）で見つかった候補にも、保存済みの使用回数を使った順位補正を適用します。使用頻度による並べ替えがONのときに有効です。別名検索や使用回数の記録をON/OFFする設定ではありません。",
+            en: "Applies ranking adjustments based on saved usage counts to candidates found through an alias (an alternate tag name). Requires usage-frequency sorting to be enabled. Does not turn alias searching or usage recording on or off.",
         },
         tac_replaceUnderscores: {
             ja: "候補を挿入するとき、タグ内のアンダースコアを半角空白へ置き換えます。",

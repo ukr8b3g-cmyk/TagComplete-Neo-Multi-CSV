@@ -138,6 +138,27 @@ const TACJP_UI_TEXT = {
 };
 
 const TACJP_CORE_LABELS = {
+    tacjp_tagFiles: ["Tag files (multiple selection)", "タグCSV（複数選択）"],
+    tacjp_translationFiles: ["Translation files (multiple selection)", "翻訳CSV（複数選択）"],
+    tacjp_uiLanguage: ["Multi-CSV UI language", "Multi-CSV画面の言語"],
+    tacjp_showTranslations: ["Display translations in suggestions", "候補に翻訳を表示"],
+    tacjp_showSourceLabels: ["Show source labels (TAG / NL / CUSTOM)", "辞書の種類を表示（TAG／NL／CUSTOM）"],
+    tacjp_colorNaturalLanguage: ["Mark natural-language suggestions", "自然言語の候補を色分け"],
+    tacjp_quickControls: ["Show user preset controls near prompts", "プロンプト付近にMulti-CSV操作を表示"],
+    tacjp_searchEngine: ["Multi-CSV search engine", "Multi-CSVの検索方式"],
+    tacjp_serverResultPool: ["Server search candidate pool", "サーバー検索で取得する候補数"],
+    tacjp_persistentSearchCache: ["Persist compiled Multi-CSV search indexes", "Multi-CSV検索インデックスを保存"],
+    tacjp_searchMemoryEntries: ["Compiled search configurations kept in memory", "メモリーに保持する検索構成数"],
+    tacjp_searchDiskEntries: ["Compiled search configurations kept on disk", "ディスクに保持する検索構成数"],
+    tacjp_searchDebug: ["Log Multi-CSV search timings", "Multi-CSV検索時間をログに記録"],
+    tacjp_clearSearchCache: ["Clear compiled Multi-CSV search cache", "Multi-CSV検索キャッシュを削除"],
+    tac_refreshTempFiles: ["Refresh internal temp files", "内部の一時一覧を更新"],
+    tacjp_cleaningEnabled: ["Forge Neo — Enable Danbooru Tag Cleaning Assist", "Forge Neo — Danbooruタグの補正傾向を表示"],
+    tacjp_cleaningShowWarnings: ["Tag Cleaning — Show remove-heavy warnings", "タグ補正情報 — 削除される傾向の強いタグを表示"],
+    tacjp_cleaningShowSuggestions: ["Tag Cleaning — Show strong related add suggestions", "タグ補正情報 — 関連して追加されやすいタグを表示"],
+    tacjp_cleaningSensitivity: ["Tag Cleaning — Sensitivity", "タグ補正情報 — 表示する傾向の範囲"],
+    tacjp_cleaningStatus: ["Tag Cleaning database status", "タグ補正情報データベースの状態"],
+    tacjp_cleaningUpdate: ["Tag Cleaning database update", "タグ補正情報データベースを更新"],
     tacjp_promptMode: ["Prompt mode", "プロンプトモード"],
     tacjp_candidateSortMode: ["Candidate sort mode", "候補の並び順"],
     tac_animaArtistPrefix: ["Add '@' to artist tags", "アーティストタグに「@」を付ける"],
@@ -173,7 +194,7 @@ const TACJP_CORE_LABELS = {
     tac_frequencyMinCount: ["Minimum uses before frequency bias", "頻度補正を開始する最小使用回数"],
     tac_frequencyMaxAge: ["Maximum age in days for frequency bias", "頻度補正の最大経過日数"],
     tac_frequencyRecommendCap: ["Maximum number of frequency recommendations", "頻度推薦の最大件数"],
-    tac_frequencyIncludeAlias: ["Frequency sorting matches aliases", "Aliasの使用も頻度へ反映"],
+    tac_frequencyIncludeAlias: ["Apply usage-frequency ranking to alias matches", "別名で検索した候補も使用頻度順にする"],
     tac_replaceUnderscores: ["Replace underscores with spaces on insertion", "挿入時にアンダースコアを空白へ変換"],
     tac_undersocreReplacementExclusionList: ["Underscore replacement exclusion patterns", "アンダースコア変換の除外パターン"],
     tac_escapeParentheses: ["Escape parentheses on insertion", "挿入時に括弧をエスケープ"],
@@ -219,6 +240,34 @@ const TACJP_SELECT_LABELS = {
 
 const TACJP_INFO_LABELS = [
     [
+        "(Controls tag candidate order. Count first applies only to normal tag CSV entries. Prompt mode still controls tag versus natural-language priority.)",
+        "（候補の並び順を設定します。投稿数優先は通常のタグCSVだけが対象です。タグと自然言語の優先順位はプロンプトモードで設定します。）",
+    ],
+    [
+        "(Server index keeps compiled CSV data on the server and transfers only matching candidates.)",
+        "（サーバー側にCSVの検索データを保持し、一致した候補だけをブラウザーへ送ります。）",
+    ],
+    [
+        "(Default OFF. Adds correction-data indicators after normal TagComplete results; it does not replace tags automatically.)",
+        "（初期値はOFFです。通常の補完候補に、補正データに基づく参考情報を追加します。タグを自動で置き換えることはありません。）",
+    ],
+    [
+        "(Means the tag is frequently removed by this correction dataset. It does NOT mean the Danbooru tag is deprecated.)",
+        "（この補正データで削除されることの多いタグを示します。Danbooruで廃止されたタグという意味ではありません。）",
+    ],
+    [
+        "(Shows tags that were frequently added in the same correction rows. These are hints, not automatic replacements.)",
+        "（同じ補正事例で一緒に追加されることの多いタグを示します。参考情報として表示し、自動置換はしません。）",
+    ],
+    [
+        "(Conservative reduces indicators; Broad shows weaker correction signals.)",
+        "（Conservativeは傾向の強いものに絞り、Broadは弱い傾向まで表示します。）",
+    ],
+    [
+        "(Explicit action only. Downloads the Hugging Face Parquet source, installs DuckDB into tags/cleaning/_vendor if needed, builds SQLite, then deletes the temporary Parquet file.)",
+        "（更新操作をしたときだけ実行します。Hugging FaceからParquetデータを取得し、必要ならDuckDBをtags/cleaning/_vendorへ導入してSQLiteを作成します。作業用Parquetファイルは処理後に削除します。）",
+    ],
+    [
         "(Files under tags/tag_files. Selection order is source priority.)",
         "（tags/tag_files内のファイル。選択順がソース優先順位です。）",
     ],
@@ -227,6 +276,7 @@ const TACJP_INFO_LABELS = [
         "（tags/translation_files内の任意ファイル。翻訳が不要な場合は空欄にします。）",
     ],
     ["(requires restart)", "（再起動が必要）"],
+    ["(requires Reload UI)", "（画面の再読み込みが必要）"],
     [
         "(Model names [with file extension] or hashes, separated by commas)",
         "（モデル名［拡張子付き］またはハッシュをカンマ区切りで指定）",
@@ -784,10 +834,11 @@ function tacJpDecorateCoreSettings() {
         const label = tacJpFindStableLabel(root);
         if (label) tacJpSetDirectLabelText(label, labels[languageIndex]);
     });
-    gradioApp().querySelectorAll("#settings_tac .settings-comment .info").forEach(node => {
+    // Checkbox comments live inside their label; sliders use settings-comment.
+    gradioApp().querySelectorAll('[id^="setting_tac"] .info').forEach(node => {
         const current = node.textContent.trim();
         const labels = TACJP_INFO_LABELS.find(pair => pair.includes(current));
-        if (labels) node.textContent = labels[languageIndex];
+        if (labels && current !== labels[languageIndex]) node.textContent = labels[languageIndex];
     });
 }
 
@@ -1239,5 +1290,6 @@ onUiUpdate(() => {
         tacJpInitializeUI();
     } else {
         tacJpDecorateAddedSettings();
+        tacJpDecorateCoreSettings();
     }
 });
