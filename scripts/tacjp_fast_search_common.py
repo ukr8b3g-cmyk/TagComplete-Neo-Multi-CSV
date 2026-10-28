@@ -9,7 +9,6 @@ The module intentionally has no Forge imports so it can be unit-tested directly.
 """
 
 import bisect
-import csv
 import re
 import unicodedata
 from array import array
@@ -23,7 +22,10 @@ try:
         infer_category_scheme,
         infer_insert_mode,
         infer_source_type,
-        DEFAULT_UNDERSCORE_EXCLUSIONS,
+        _ALIAS_KEYS, _CATEGORY_KEYS, _CATEGORY_SCHEME_KEYS, _COUNT_KEYS,
+        _INSERT_MODE_KEYS, _SOURCE_TYPE_KEYS, _TAG_KEYS, _TRANSLATION_KEYS,
+        _clean, _normalise_header, _first, _split_values, _to_category, _to_int,
+        _tag_key as canonical_tag, _decode_tag_row, _decode_translation_row,
     )
 except (ImportError, ModuleNotFoundError):
     from jp_assist_core import (  # type: ignore
@@ -31,8 +33,14 @@ except (ImportError, ModuleNotFoundError):
         infer_category_scheme,
         infer_insert_mode,
         infer_source_type,
-        DEFAULT_UNDERSCORE_EXCLUSIONS,
+        _ALIAS_KEYS, _CATEGORY_KEYS, _CATEGORY_SCHEME_KEYS, _COUNT_KEYS,
+        _INSERT_MODE_KEYS, _SOURCE_TYPE_KEYS, _TAG_KEYS, _TRANSLATION_KEYS,
+        _clean, _normalise_header, _first, _split_values, _to_category, _to_int,
+        _tag_key as canonical_tag, _decode_tag_row, _decode_translation_row,
     )
+
+_iter_rows = DataStore._iter_rows
+_as_mapping = DataStore._as_mapping
 
 CACHE_VERSION = 8
 FILE_CACHE_VERSION = 2
@@ -41,23 +49,6 @@ DEFAULT_RESULT_LIMIT = 250
 MAX_RESULT_LIMIT = 2000
 UINT32_MAX = (1 << 32) - 1
 
-_TAG_KEYS = ("tag", "name", "english", "token", "value")
-_CATEGORY_KEYS = ("category", "cat", "type_id")
-_COUNT_KEYS = ("count", "post_count", "posts", "priority", "weight", "score")
-_ALIAS_KEYS = ("aliases", "alias", "alternate_names", "synonyms")
-_TRANSLATION_KEYS = (
-    "ja",
-    "jp",
-    "japanese",
-    "translation",
-    "translations",
-    "translated",
-    "label",
-    "display",
-)
-_SOURCE_TYPE_KEYS = ("source_type", "source", "kind", "vocabulary_type")
-_INSERT_MODE_KEYS = ("insert_mode", "insertion", "separator_mode", "mode")
-_CATEGORY_SCHEME_KEYS = ("category_scheme", "scheme", "booru")
 
 _SOURCE_TO_CODE = {"tag": 0, "natural_language": 1, "custom": 2}
 _CODE_TO_SOURCE = ("tag", "natural_language", "custom")
@@ -78,13 +69,6 @@ _CODE_TO_SCHEME = (
     "danbooru_e621_merged",
     "natural_language",
     "custom",
-)
-
-_CANONICAL_PROTECTED_PREFIXES = ("score_", "rating_", "source_")
-_CANONICAL_PROTECTED_EXACT = frozenset(
-    str(value).casefold()
-    for value in DEFAULT_UNDERSCORE_EXCLUSIONS
-    if "*" not in str(value) and "?" not in str(value)
 )
 
 
@@ -156,58 +140,6 @@ def is_compact_index(index: object) -> bool:
     )
 
 
-def _canonical_underscore_protected(text: str) -> bool:
-    if text.startswith("__") and text.endswith("__"):
-        return True
-    return text in _CANONICAL_PROTECTED_EXACT or text.startswith(
-        _CANONICAL_PROTECTED_PREFIXES
-    )
-
-
-def _clean(value: Any) -> str:
-    return str(value or "").strip().lstrip("\ufeff")
-
-
-def _normalise_header(value: Any) -> str:
-    return re.sub(r"[\s\-]+", "_", _clean(value).lower())
-
-
-def _first(row: Mapping[str, Any], keys: Iterable[str]) -> str:
-    for key in keys:
-        value = _clean(row.get(key))
-        if value:
-            return value
-    return ""
-
-
-def _split_values(value: Any) -> list[str]:
-    text = _clean(value)
-    if not text:
-        return []
-    return [item.strip() for item in re.split(r"[,;\n\r]+", text) if item.strip()]
-
-
-def _to_int(value: Any) -> int | None:
-    text = _clean(value).replace(",", "")
-    if not text:
-        return None
-    try:
-        count = int(float(text))
-    except (TypeError, ValueError):
-        return None
-    return count if count >= 0 else None
-
-
-def _to_category(value: Any) -> int | None:
-    text = _clean(value)
-    if not text:
-        return None
-    try:
-        return int(float(text))
-    except (TypeError, ValueError):
-        return None
-
-
 def normalize_search(
     value: Any,
     preserve_trailing_separator: bool = False,
@@ -223,15 +155,6 @@ def normalize_search(
     return f"{normalised} " if trailing_separator and normalised else normalised
 
 
-def canonical_tag(value: Any) -> str:
-    text = unicodedata.normalize("NFKC", _clean(value)).casefold()
-    if not text:
-        return ""
-    if not _canonical_underscore_protected(text):
-        text = text.replace("_", " ")
-    return re.sub(r"\s+", " ", text).strip()
-
-
 def _dedupe_mapping(values: Iterable[str]) -> dict[str, str]:
     output: dict[str, str] = {}
     for value in values:
@@ -239,36 +162,6 @@ def _dedupe_mapping(values: Iterable[str]) -> dict[str, str]:
         if item:
             output.setdefault(item.casefold(), item)
     return output
-
-
-def _iter_rows(path: Path):
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.reader(handle)
-        first_row: list[str] | None = None
-        for row in reader:
-            if row and any(_clean(value) for value in row):
-                first_row = row
-                break
-        if first_row is None:
-            return
-        candidate_header = [_normalise_header(value) for value in first_row]
-        header = (
-            candidate_header
-            if candidate_header and candidate_header[0] in _TAG_KEYS
-            else None
-        )
-        if header is None:
-            yield None, first_row
-        for row in reader:
-            if row and any(_clean(value) for value in row):
-                yield header, row
-
-
-def _as_mapping(header: Sequence[str], row: Sequence[str]) -> dict[str, str]:
-    return {
-        header[index]: row[index] if index < len(row) else ""
-        for index in range(len(header))
-    }
 
 
 def _safe_path(directory: Path, name: str) -> Path:

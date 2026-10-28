@@ -251,10 +251,10 @@
             return `${group}:${String(Number(score) || 0).padStart(4, "0")}:${inverseCount}:${normalizeSearch(text)}`;
         }
 
-        function serverSelected() {
+        function serverSelected(config = TAC_CFG) {
             return !remoteDisabledForSession
-                && !TAC_CFG?.translation?.liveTranslation
-                && String(opts?.["tacjp_searchEngine"] || "Server index") !== "Legacy browser";
+                && !config?.translation?.liveTranslation
+                && String(config?.searchEngine || opts?.["tacjp_searchEngine"] || "Server index") !== "Legacy browser";
         }
 
         function warmupRequest() {
@@ -373,37 +373,27 @@
             tagsLoaded = true;
         }
 
+        function invalidateSearch() {
+            timingState.cancel(requestSequence);
+            requestSequence += 1;
+            activeController?.abort();
+            activeController = null;
+        }
+
         // Keep lazy loading, but in server mode do not transfer the complete merged
         // dataset to the browser. The legacy extra-file list stays local because it
         // has separate Insert before/after semantics in upstream TagComplete.
         loadTags = async function fastLoadTags(config) {
-            if (!serverSelected()) return legacyLoadTags(config);
+            invalidateSearch();
+            if (!serverSelected(config)) return legacyLoadTags(config);
             allTags = [];
             tagIndex?.clear?.();
             translations.clear();
             await loadExtraTags(config);
         };
 
-        let previousServerMode = serverSelected();
         if (typeof QUEUE_AFTER_CONFIG_CHANGE !== "undefined") {
-            QUEUE_AFTER_CONFIG_CHANGE.push(async () => {
-                const nextServerMode = serverSelected();
-                if (nextServerMode === previousServerMode) return;
-                previousServerMode = nextServerMode;
-                allTags = [];
-                tagIndex?.clear?.();
-                translations.clear();
-                tagsLoaded = false;
-                if (nextServerMode) {
-                    await loadTags(TAC_CFG);
-                } else {
-                    await legacyLoadTags(TAC_CFG);
-                    if (TAC_CFG?.useIndexedSearch && allTags.length > 0) {
-                        await buildTagIndex();
-                    }
-                }
-                tagsLoaded = true;
-            });
+            QUEUE_AFTER_CONFIG_CHANGE.unshift(invalidateSearch);
             QUEUE_AFTER_CONFIG_CHANGE.push(() => {
                 scheduleServerWarmup();
             });
@@ -457,13 +447,15 @@
             }
 
             async parse(textArea, prompt) {
+                const config = TAC_CFG;
                 const sequence = ++requestSequence;
+                const current = () => sequence === requestSequence && config === TAC_CFG && serverSelected(config);
                 if (activeController) activeController.abort();
                 activeController = new AbortController();
                 timingState.begin(sequence, tagword);
 
                 const body = TACJPFastSearchCore.makeRequest(
-                    TAC_CFG,
+                    config,
                     tagword,
                     prompt,
                     textArea?.selectionStart ?? String(prompt || "").length,
@@ -489,7 +481,7 @@
                     }
                     const data = await response.json();
                     timingState.mark("json_done", sequence);
-                    if (sequence !== requestSequence) return [];
+                    if (!current()) return [];
                     if (!data || !Array.isArray(data.results)) {
                         throw new Error(data?.error || "Search API returned no results array");
                     }
@@ -521,10 +513,10 @@
                             ? Number(row[11])
                             : output.length;
                         result.sortKey = (
-                            TAC_CFG.candidateSortMode === "Legacy"
-                            || TAC_CFG.candidateSortMode === "Count"
+                            config.candidateSortMode === "Legacy"
+                            || config.candidateSortMode === "Count"
                         )
-                            ? `1:${TAC_CFG.candidateSortMode.toLowerCase()}:${String(output.length).padStart(8, "0")}`
+                            ? `1:${config.candidateSortMode.toLowerCase()}:${String(output.length).padStart(8, "0")}`
                             : stableSortKey(
                                 "1",
                                 result.matchScore,
@@ -553,7 +545,7 @@
                         timingState.abortedRequest();
                         return [];
                     }
-                    if (sequence !== requestSequence) return [];
+                    if (!current()) return [];
                     timingState.cancel(sequence);
                     if (typeof updateTacStatusDot === "function") updateTacStatusDot("error");
                     await switchToLegacy(error);

@@ -48,6 +48,13 @@ DEFAULT_UNDERSCORE_EXCLUSIONS = (
     ">_o",
 )
 
+_CANONICAL_PROTECTED_PREFIXES = tuple(
+    value[:-1].casefold() for value in DEFAULT_UNDERSCORE_EXCLUSIONS if value.endswith("*")
+)
+_CANONICAL_PROTECTED_EXACT = frozenset(
+    value.casefold() for value in DEFAULT_UNDERSCORE_EXCLUSIONS if "*" not in value and "?" not in value
+)
+
 DEFAULT_REMOTE_URL = (
     "https://huggingface.co/datasets/SpadeA/danbooru-tag-csv/resolve/main/"
     "danbooru_tags.csv?download=true"
@@ -232,7 +239,9 @@ def _tag_key(value: Any) -> str:
     text = unicodedata.normalize("NFKC", _clean(value)).casefold()
     if not text:
         return ""
-    if not is_underscore_protected(text, DEFAULT_UNDERSCORE_EXCLUSIONS):
+    if not (text.startswith("__") and text.endswith("__")) and not (
+        text in _CANONICAL_PROTECTED_EXACT or text.startswith(_CANONICAL_PROTECTED_PREFIXES)
+    ):
         text = text.replace("_", " ")
     return re.sub(r"\s+", " ", text).strip()
 
@@ -271,6 +280,56 @@ def is_underscore_protected(tag: str, patterns: str | Sequence[str]) -> bool:
     if text.startswith("__") and text.endswith("__"):
         return True
     return any(fnmatch.fnmatchcase(text.casefold(), pattern.casefold()) for pattern in parse_patterns(patterns))
+
+
+def _decode_tag_row(header, row, display_name, file_source_type, file_scheme):
+    if header:
+        mapping = DataStore._as_mapping(header, row)
+        tag = _first(mapping, _TAG_KEYS)
+        category = _to_category(_first(mapping, _CATEGORY_KEYS))
+        raw_count = _first(mapping, _COUNT_KEYS)
+        aliases = _split_values(_first(mapping, _ALIAS_KEYS))
+        translations = _split_values(_first(mapping, _TRANSLATION_KEYS))
+        source_type = infer_source_type(display_name, _first(mapping, _SOURCE_TYPE_KEYS))
+        count = _to_int(raw_count) if source_type == "tag" else None
+        scheme = infer_category_scheme(display_name, _first(mapping, _CATEGORY_SCHEME_KEYS))
+        insert_mode = infer_insert_mode(tag, source_type, _first(mapping, _INSERT_MODE_KEYS))
+    else:
+        tag = _clean(row[0] if row else "")
+        category = _to_category(row[1] if len(row) > 1 else "")
+        aliases = _split_values(row[3] if len(row) > 3 else "")
+        translations = _split_values(row[4] if len(row) > 4 else "")
+        source_type = file_source_type
+        count = (
+            _to_int(row[2] if len(row) > 2 else "")
+            if source_type == "tag"
+            else None
+        )
+        scheme = file_scheme
+        insert_mode = infer_insert_mode(tag, source_type)
+    if not tag or tag.startswith("#"):
+        return None
+    return tag, category, count, aliases, translations, source_type, insert_mode, scheme
+
+
+def _decode_translation_row(header, row):
+    if header:
+        mapping = DataStore._as_mapping(header, row)
+        tag = _first(mapping, _TAG_KEYS)
+        translations = _split_values(_first(mapping, _TRANSLATION_KEYS))
+        aliases = _split_values(_first(mapping, _ALIAS_KEYS))
+        # JP Assist commonly stores visible Japanese in ``ja`` and all
+        # searchable forms in ``aliases``. A generic ``translation``
+        # column follows the same path.
+    else:
+        tag = _clean(row[0] if row else "")
+        if len(row) >= 3:
+            translations = _split_values(row[1])
+            aliases = _split_values(row[2])
+        else:
+            translations = _split_values(row[1] if len(row) > 1 else "")
+            aliases = []
+    return tag, translations, aliases
 
 
 @dataclass
@@ -424,32 +483,10 @@ class DataStore:
         file_scheme = infer_category_scheme(display_name)
 
         for header, row in self._iter_rows(path):
-            if header:
-                mapping = self._as_mapping(header, row)
-                tag = _first(mapping, _TAG_KEYS)
-                category = _to_category(_first(mapping, _CATEGORY_KEYS))
-                raw_count = _first(mapping, _COUNT_KEYS)
-                aliases = _split_values(_first(mapping, _ALIAS_KEYS))
-                translations = _split_values(_first(mapping, _TRANSLATION_KEYS))
-                source_type = infer_source_type(display_name, _first(mapping, _SOURCE_TYPE_KEYS))
-                count = _to_int(raw_count) if source_type == "tag" else None
-                scheme = infer_category_scheme(display_name, _first(mapping, _CATEGORY_SCHEME_KEYS))
-                insert_mode = infer_insert_mode(tag, source_type, _first(mapping, _INSERT_MODE_KEYS))
-            else:
-                tag = _clean(row[0] if row else "")
-                category = _to_category(row[1] if len(row) > 1 else "")
-                aliases = _split_values(row[3] if len(row) > 3 else "")
-                translations = _split_values(row[4] if len(row) > 4 else "")
-                source_type = file_source_type
-                count = (
-                    _to_int(row[2] if len(row) > 2 else "")
-                    if source_type == "tag"
-                    else None
-                )
-                scheme = file_scheme
-                insert_mode = infer_insert_mode(tag, source_type)
-            if not tag or tag.startswith("#"):
+            values = _decode_tag_row(header, row, display_name, file_source_type, file_scheme)
+            if values is None:
                 continue
+            tag, category, count, aliases, translations, source_type, insert_mode, scheme = values
             yield TagRecord(
                 tag=tag,
                 category=category,
@@ -467,22 +504,7 @@ class DataStore:
     def _read_translation_file(self, path: Path) -> dict[str, dict[str, list[str]]]:
         output: dict[str, dict[str, list[str]]] = {}
         for header, row in self._iter_rows(path):
-            if header:
-                mapping = self._as_mapping(header, row)
-                tag = _first(mapping, _TAG_KEYS)
-                translations = _split_values(_first(mapping, _TRANSLATION_KEYS))
-                aliases = _split_values(_first(mapping, _ALIAS_KEYS))
-                # JP Assist commonly stores visible Japanese in ``ja`` and all
-                # searchable forms in ``aliases``. A generic ``translation``
-                # column follows the same path.
-            else:
-                tag = _clean(row[0] if row else "")
-                if len(row) >= 3:
-                    translations = _split_values(row[1])
-                    aliases = _split_values(row[2])
-                else:
-                    translations = _split_values(row[1] if len(row) > 1 else "")
-                    aliases = []
+            tag, translations, aliases = _decode_translation_row(header, row)
             if not tag or tag.startswith("#"):
                 continue
             key = _tag_key(tag)

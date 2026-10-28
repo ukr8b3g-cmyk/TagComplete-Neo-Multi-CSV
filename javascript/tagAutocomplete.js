@@ -274,6 +274,7 @@ async function loadTags(c) {
             prompt_mode: c.promptMode || "Tag",
         });
         const data = await postTacAPI("tacjp/v1/merged-tags", payload);
+        if (c !== TAC_CFG) return;
         if (!data || !Array.isArray(data.rows)) {
             throw new Error(data?.error || "Merged tag API returned no rows");
         }
@@ -290,6 +291,7 @@ async function loadTags(c) {
             return tag;
         }).filter(row => row[0].trim().length > 0);
     } catch (e) {
+        if (c !== TAC_CFG) return;
         console.error("[TagComplete Neo Multi-CSV] Error loading merged tags:", e);
         allTags = [];
     }
@@ -301,11 +303,14 @@ async function loadExtraTags(c) {
     if (c.extra.extraFile && c.extra.extraFile !== "None") {
         try {
             const files = await fetchTacAPI("tacjp/v1/files");
+            if (c !== TAC_CFG) return;
             const available = Array.isArray(files?.tag_files)
                 ? files.tag_files.map(item => String(item?.name || ""))
                 : [];
             if (!available.includes(c.extra.extraFile)) return;
-            extras = await loadCSV(`${tagBasePath}/tag_files/${c.extra.extraFile}`) || [];
+            const rows = await loadCSV(`${tagBasePath}/tag_files/${c.extra.extraFile}`) || [];
+            if (c !== TAC_CFG) return;
+            extras = rows;
             extras.forEach(e => {
                 if (e[4]) translations.set(e[0], e[4]);
             });
@@ -362,6 +367,7 @@ async function syncOptions() {
         tagFiles,
         tagFile: tagFiles[0] || "None", // compatibility for original extension code
         promptMode: opts["tacjp_promptMode"] || "Tag",
+        searchEngine: opts["tacjp_searchEngine"] || "Server index",
         candidateSortMode: opts["tacjp_candidateSortMode"] || "Count",
         uiLanguage: opts["tacjp_uiLanguage"] || "Auto",
         showTranslations: opts["tacjp_showTranslations"] !== false,
@@ -444,11 +450,16 @@ async function syncOptions() {
 
     if (newCFG.alias.onlyShowAlias) newCFG.alias.searchByAlias = true;
 
-    const dataChanged = TAC_CFG && (
-        !sameStringList(newCFG.tagFiles, TAC_CFG.tagFiles)
-        || !sameStringList(newCFG.translation.translationFiles, TAC_CFG.translation.translationFiles)
-        || newCFG.extra.extraFile !== TAC_CFG.extra.extraFile
+    const previousCFG = TAC_CFG;
+    const dataChanged = previousCFG && (
+        !sameStringList(newCFG.tagFiles, previousCFG.tagFiles)
+        || !sameStringList(newCFG.translation.translationFiles, previousCFG.translation.translationFiles)
+        || newCFG.extra.extraFile !== previousCFG.extra.extraFile
+        || newCFG.translation.liveTranslation !== previousCFG.translation.liveTranslation
+        || newCFG.searchEngine !== previousCFG.searchEngine
     );
+    // Publish the new settings before any await so obsolete loads cannot write back.
+    TAC_CFG = newCFG;
 
     if (dataChanged) {
         allTags = [];
@@ -456,11 +467,12 @@ async function syncOptions() {
         extras = [];
         tagsLoaded = false;
         await loadTags(newCFG);
-        if (newCFG.useIndexedSearch) await buildTagIndex();
+        if (TAC_CFG !== newCFG) return;
+        if (newCFG.useIndexedSearch && allTags.length > 0) await buildTagIndex();
         tagsLoaded = true;
     }
 
-    if (TAC_CFG && newCFG.useIndexedSearch !== TAC_CFG.useIndexedSearch) {
+    if (!dataChanged && previousCFG && newCFG.useIndexedSearch !== previousCFG.useIndexedSearch) {
         if (newCFG.useIndexedSearch && allTags.length > 0) {
             await buildTagIndex();
         } else if (!newCFG.useIndexedSearch) {
@@ -468,7 +480,7 @@ async function syncOptions() {
         }
     }
 
-    if (TAC_CFG && newCFG.modelSortOrder !== TAC_CFG.modelSortOrder) {
+    if (previousCFG && newCFG.modelSortOrder !== previousCFG.modelSortOrder) {
         const dropdown = gradioApp().querySelector("#setting_tac_modelSortOrder");
         if (dropdown) {
             dropdown.style.opacity = 0.5;
@@ -481,7 +493,7 @@ async function syncOptions() {
         }
     }
 
-    if (TAC_CFG && newCFG.maxResults !== TAC_CFG.maxResults) {
+    if (previousCFG && newCFG.maxResults !== previousCFG.maxResults) {
         gradioApp().querySelectorAll(".autocompleteResults").forEach(r => {
             r.style.maxHeight = `calc(${newCFG.maxResults * 50}px + 26px)`;
         });
@@ -491,7 +503,6 @@ async function syncOptions() {
         [...gradioApp().querySelectorAll('.acRuby')].forEach(r => r.remove());
     }
 
-    TAC_CFG = newCFG;
     await processQueue(QUEUE_AFTER_CONFIG_CHANGE, null);
 }
 
@@ -1499,9 +1510,11 @@ function checkKeywordInsertionUndo(textArea, event) {
 async function ensureTagsLoaded() {
     if (tagsLoaded) return;
     if (!TAC_CFG) return;
+    const config = TAC_CFG;
     allTags = [];
-    await loadTags(TAC_CFG);
-    if (TAC_CFG.useIndexedSearch && allTags.length > 0) {
+    await loadTags(config);
+    if (TAC_CFG !== config) return;
+    if (config.useIndexedSearch && allTags.length > 0) {
         await buildTagIndex();
     }
     // Mark the load complete even when the user intentionally selected no tag

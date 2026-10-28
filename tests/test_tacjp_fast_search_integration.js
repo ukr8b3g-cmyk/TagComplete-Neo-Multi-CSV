@@ -239,6 +239,8 @@ require("../javascript/zzzz_tacjp_fast_search.js");
     // so changing to that mode must load the legacy browser dataset automatically.
     TAC_CFG.translation.liveTranslation = true;
     await QUEUE_AFTER_CONFIG_CHANGE[0]();
+    // syncOptions owns the reload; the server hook only invalidates requests.
+    await loadTags(TAC_CFG);
     assert.strictEqual(legacyLoads, 1);
     assert.strictEqual(parser.triggerCondition(), false);
     console.log("tacjp fast search integration tests passed");

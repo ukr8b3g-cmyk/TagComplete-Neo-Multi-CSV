@@ -80,6 +80,14 @@ def sensitivity_settings(name: str) -> dict[str, Any]:
     return dict(SENSITIVITY_PRESETS.get(name, SENSITIVITY_PRESETS["Balanced"]))
 
 
+class _ClosingConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 class TagCleaningStore:
     """Small SQLite lookup layer generated from the image-level corrections."""
 
@@ -99,10 +107,11 @@ class TagCleaningStore:
                 f"file:{target.as_posix()}?mode=ro",
                 uri=True,
                 timeout=2.0,
+                factory=_ClosingConnection,
                 check_same_thread=False,
             )
         else:
-            connection = sqlite3.connect(target, timeout=10.0)
+            connection = sqlite3.connect(target, timeout=10.0, factory=_ClosingConnection)
         connection.row_factory = sqlite3.Row
         return connection
 

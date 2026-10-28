@@ -14,19 +14,15 @@ from typing import Any, Sequence
 
 try:
     from scripts.tacjp_fast_search_common import (
-        CACHE_VERSION, FILE_CACHE_VERSION, DataStore, _ALIAS_KEYS, _CATEGORY_KEYS,
-        _CATEGORY_SCHEME_KEYS, _COUNT_KEYS, _INSERT_MODE_KEYS, _SOURCE_TYPE_KEYS,
-        _TAG_KEYS, _TRANSLATION_KEYS, _as_mapping, _clean, _first, _iter_rows,
-        _safe_path, _split_values, _to_category, _to_int, canonical_tag,
-        infer_category_scheme, infer_insert_mode, infer_source_type,
+        CACHE_VERSION, FILE_CACHE_VERSION, DataStore, _clean, _iter_rows,
+        _safe_path, canonical_tag, infer_category_scheme, infer_source_type,
+        _decode_tag_row, _decode_translation_row,
     )
 except (ImportError, ModuleNotFoundError):
     from tacjp_fast_search_common import (  # type: ignore
-        CACHE_VERSION, FILE_CACHE_VERSION, DataStore, _ALIAS_KEYS, _CATEGORY_KEYS,
-        _CATEGORY_SCHEME_KEYS, _COUNT_KEYS, _INSERT_MODE_KEYS, _SOURCE_TYPE_KEYS,
-        _TAG_KEYS, _TRANSLATION_KEYS, _as_mapping, _clean, _first, _iter_rows,
-        _safe_path, _split_values, _to_category, _to_int, canonical_tag,
-        infer_category_scheme, infer_insert_mode, infer_source_type,
+        CACHE_VERSION, FILE_CACHE_VERSION, DataStore, _clean, _iter_rows,
+        _safe_path, canonical_tag, infer_category_scheme, infer_source_type,
+        _decode_tag_row, _decode_translation_row,
     )
 
 
@@ -238,59 +234,11 @@ class FastSearchFilesMixin:
         file_source = infer_source_type(name)
         file_scheme = infer_category_scheme(name)
         for header, row in _iter_rows(path):
-            if header:
-                mapping = _as_mapping(header, row)
-                tag = _first(mapping, _TAG_KEYS)
-                category = _to_category(_first(mapping, _CATEGORY_KEYS))
-                raw_count = _first(mapping, _COUNT_KEYS)
-                aliases = tuple(_split_values(_first(mapping, _ALIAS_KEYS)))
-                translations = tuple(
-                    _split_values(_first(mapping, _TRANSLATION_KEYS))
-                )
-                source_type = infer_source_type(
-                    name,
-                    _first(mapping, _SOURCE_TYPE_KEYS),
-                )
-                count = _to_int(raw_count) if source_type == "tag" else None
-                scheme = infer_category_scheme(
-                    name,
-                    _first(mapping, _CATEGORY_SCHEME_KEYS),
-                )
-                insert_mode = infer_insert_mode(
-                    tag,
-                    source_type,
-                    _first(mapping, _INSERT_MODE_KEYS),
-                )
-            else:
-                tag = _clean(row[0] if row else "")
-                category = _to_category(row[1] if len(row) > 1 else "")
-                aliases = tuple(
-                    _split_values(row[3] if len(row) > 3 else "")
-                )
-                translations = tuple(
-                    _split_values(row[4] if len(row) > 4 else "")
-                )
-                source_type = file_source
-                count = (
-                    _to_int(row[2] if len(row) > 2 else "")
-                    if source_type == "tag"
-                    else None
-                )
-                scheme = file_scheme
-                insert_mode = infer_insert_mode(tag, source_type)
-            if tag and not tag.startswith("#"):
-                rows.append(
-                    (
-                        tag,
-                        category,
-                        count,
-                        aliases,
-                        translations,
-                        source_type,
-                        insert_mode,
-                        scheme,
-                    )
-                )
+            values = _decode_tag_row(header, row, name, file_source, file_scheme)
+            if values is None:
+                continue
+            tag, category, count, aliases, translations, source_type, insert_mode, scheme = values
+            rows.append((tag, category, count, tuple(aliases), tuple(translations), source_type, insert_mode, scheme))
         if persistent:
             self._try_write_pickle(
                 cache_path,
@@ -329,23 +277,7 @@ class FastSearchFilesMixin:
             tuple[dict[str, str], dict[str, str]],
         ] = {}
         for header, row in _iter_rows(path):
-            if header:
-                mapping = _as_mapping(header, row)
-                tag = _first(mapping, _TAG_KEYS)
-                translations = _split_values(
-                    _first(mapping, _TRANSLATION_KEYS)
-                )
-                aliases = _split_values(_first(mapping, _ALIAS_KEYS))
-            else:
-                tag = _clean(row[0] if row else "")
-                if len(row) >= 3:
-                    translations = _split_values(row[1])
-                    aliases = _split_values(row[2])
-                else:
-                    translations = _split_values(
-                        row[1] if len(row) > 1 else ""
-                    )
-                    aliases = []
+            tag, translations, aliases = _decode_translation_row(header, row)
             if not tag or tag.startswith("#"):
                 continue
             canonical = canonical_tag(tag)
