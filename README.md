@@ -49,13 +49,37 @@ controls are intentionally hidden in the current release.
 - **v1.2.0 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.0.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.0.zip)
 - **旧バージョン:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
-現在、`Code` → `Download ZIP`、`Install from URL`、上記のv1.2.0 ZIPのいずれからも、
-Tag Cleaning Assistを含むv1.2.0を取得できます。ReleaseのZIPはv1.2.0固定です。
+`Code` → `Download ZIP`と`Install from URL`は、v1.2.0以降の修正を含む最新mainを取得します。
+上記のRelease ZIPはv1.2.0固定で、今回の①〜⑦は含みません。
 
 ### What's New
 
-- プロンプト内の通常タグで`Ctrl + ↑ / ↓`または`Ctrl + Wheel`を使い、weightを`0.05`単位で変更できます。
-- 選択範囲、またはcaret位置のカンマ区切りタグが対象です。`1.00`では通常タグへ戻り、下限は`0.00`です。
+#### 2026-10-31：入力保護・重複処理・Undo・検索件数の改善
+
+今回の①〜⑦は**最新のmainに含まれる修正**です。固定されたv1.2.0 Release ZIPには含まれません。
+
+1. **日本語IMEの誤確定を防止**：変換中のEnter／Tab／矢印を補完が消費せず、変換開始時の古い候補と検索を無効化。変換確定キーを補完確定に二重使用しません。
+2. **Cleaning OFF後の古い警告を防止**：OFFやSettingsのApplyで進行中の照会とキャッシュを無効化。遅れた成功・失敗応答で警告やキャッシュを復活させません。
+3. **初回ロードとCleaning照会を共有**：同じ設定の読み込み途中に入力してもロードを共有。同じ候補への進行中照会も共有し、Cleaningは段階描画した候補から調べ、スクロール時に追加取得します。
+4. **動的入力欄の監視を修正**：Textノードでの例外と同じaccordionへの重複登録を防止。複数の入力セレクター、入れ子の追加・削除・再挿入を扱います。
+5. **サーバー検索でも最大候補数を適用**：通常タグ・自然言語・追加CSV候補を順位付けした後で表示上限を適用。使用頻度による順位と正確な総件数、LoRA／Embedding／Wildcard等の専用候補は維持します。
+6. **重み変更を標準Undo／Redoに対応**：対象範囲だけをネイティブ編集し、フォーカス・選択・スクロールを保持。inputの二重通知を避け、ブラウザーの編集履歴で戻せるようにしました。
+7. **正確な検索件数の集計を軽量化**：完全な候補集合が得られる場合はその範囲で集計。同じ検索語と別名／翻訳設定の件数を、常駐索引ごとに最大128件メモリーで再利用します。辞書変更・索引の切替／破棄・キャッシュ消去で古い件数を切り離し、ディスクへは保存しません。検索順と正確な総件数は変更しません。
+
+**使い方・設定**
+
+- 新しいON/OFF設定はありません。IMEの変換を確定してから、次の独立したEnter／Tabで候補を選択します。
+- **Settings → Tag Autocomplete / Multi-CSV → 最大候補数（Maximum results）**を20にし、**すべての候補を表示（Show all results）**をOFFにすると通常候補を最大20件に制限します。ONなら表示側の切り詰めを解除しますが、サーバーの取得pool上限とは別です。総ヒット件数は表示件数とは独立して正確に表示します。
+- **Danbooruタグの補正傾向を表示（Enable Danbooru Tag Cleaning Assist）**は従来どおり初期OFF。利用する場合だけONにします。タグの自動削除・置換は行いません。OFF／Apply時は古い照会を破棄します。
+- 重みは通常タグ内にカーソルを置くか範囲選択して、**Ctrl＋↑／↓は0.05、Ctrl＋ホイールは0.10刻み**で変更します。**Ctrl＋ZでUndo、Ctrl＋Shift＋ZでRedo**。特殊構文やIME変換中には適用しません。ネイティブ編集に対応しない場合は文字列を直接書き換えず、変更を行いません。
+- 件数集計の軽量化は自動で働きます。短い検索語の初回全件集計と初回索引構築は残ります。既存の検索時間ログではAPIの`count_ms`で集計部分を区別できます。
+
+**反映方法**：ワークフローやプロンプトを保存し、利用者のタイミングでForgeを次回起動してブラウザーを再読み込みしてください。①〜⑥のJSは画面の再読み込み、⑦のPythonはForgeの次回起動で有効です。ブラウザーの更新だけでは起動中Pythonは置き換わりません。更新作業で自動の再起動・再読み込みは行いません。保存済み設定・CSV選択順・辞書・ワークフロー形式・追加依存は変更しません。
+
+**検証と範囲**：WindowsのローカルPython156成功・1スキップ・119サブテスト成功、JS13スクリプト成功。①②は分離Chrome14項目、⑥は実際のネイティブUndo／Redoなど分離Chrome8項目で確認しました。実Forge／Gradio画面・OS日本語IME・実Queue内容の受入確認とは別です。旧新応答1,728条件と実辞書447,632行の8検索で候補順・件数が一致。CPU上の集計部分はtemple約111→0.04ms、blue約113→1.31msでした（各3回の中央値、索引構築・順位付け・画面描画を除く）。短語初回の全件走査は残り、キー入力から表示までの時間を保証する測定ではありません。
+
+- プロンプト内の通常タグで`Ctrl + ↑ / ↓`は`0.05`、`Ctrl + Wheel`は`0.10`単位でweightを変更できます。
+- 選択範囲、またはcaret位置のカンマ区切りタグが対象です。`1.00`では通常タグへ戻り、変更範囲は`-20.00`〜`10.00`です。
 - LoRA、LyCORIS、Embedding、Wildcard、Dynamic Prompt、`$...`構文、角括弧、IME入力中は変更しません。
 - この機能は現在の`main`で利用できます。タグ付きv1.2.0 Release ZIPは固定されており、この追加変更を含みません。
 
@@ -661,13 +685,37 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 - **Direct v1.2.0 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.0.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.0.zip)
 - **Previous:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
-The current `Code` → `Download ZIP`, `Install from URL`, and the direct v1.2.0 ZIP above
-all provide v1.2.0 with Tag Cleaning Assist. The release ZIP remains fixed to v1.2.0.
+`Code` → `Download ZIP` and `Install from URL` provide current main, including fixes made after v1.2.0.
+The direct Release ZIP remains fixed to v1.2.0 and does not include fixes 1–7 above.
 
 ### What's New
 
-- Use `Ctrl + Up / Down` or `Ctrl + Wheel` on a normal prompt tag to adjust its weight in `0.05` steps.
-- The selected text, or the comma-delimited tag at the caret, is adjusted. A weight of `1.00` returns to plain text, with a lower limit of `0.00`.
+#### 2026-10-31: input safety, shared work, Undo and exact match counting
+
+Fixes 1–7 are included in **current main**, not the fixed v1.2.0 Release ZIP.
+
+1. **Protect IME composition:** do not consume Enter/Tab/arrows during composition; invalidate old suggestions and searches at composition start and avoid using the confirmation key twice.
+2. **Reject stale Cleaning responses:** turning Cleaning OFF or applying Settings invalidates requests and cache. Late successes and failures cannot restore old annotations or cache entries.
+3. **Share loading and lookup work:** typing during the same configuration's load waits for that load. Pending Cleaning lookups are shared; only rendered candidates are queried, with later rows loaded during scrolling.
+4. **Fix dynamic textarea observation:** ignore Text nodes, share one observer per accordion while retaining all selectors, and handle nested insertion, removal and reinsertion.
+5. **Apply the final candidate cap in server search:** limit normal tags, natural-language and extra CSV candidates after ranking. Preserve usage ranking, exact total matches and dedicated LoRA/Embedding/Wildcard lists.
+6. **Support native weight Undo/Redo:** edit only the target range through native input, retaining focus, selection and scroll without duplicate input notifications.
+7. **Count matches without unnecessary full scans:** count within complete indexed candidate sets and reuse exact counts for the normalized query and alias/translation switches. Each resident index keeps at most 128 memory-only counts. Changed/discarded indexes and cache clearing detach old counts; ranking and exact totals remain unchanged.
+
+**How to use**
+
+- No new switches. Finish IME composition, then use a separate Enter/Tab to choose a suggestion.
+- In **Settings → Tag Autocomplete / Multi-CSV**, set **Maximum results** to 20 and turn **Show all results** OFF to cap normal candidates at 20. ON removes this display cap; the server retrieval pool still has its own limit. Exact total matches remain independent of the displayed subset.
+- **Enable Danbooru Tag Cleaning Assist** remains OFF by default. Enable it only when wanted; it provides hints without automatically deleting or replacing tags. OFF/Apply invalidates old lookups.
+- With the caret inside a normal tag, or a tag selected, use **Ctrl+Up/Down for 0.05 steps** and **Ctrl+Wheel for 0.10 steps**. Use **Ctrl+Z to Undo** and **Ctrl+Shift+Z to Redo**. Special syntax and active IME composition remain protected. Unsupported native editing leaves the text unchanged instead of falling back to direct assignment.
+- Count optimization is automatic. Initial index construction and first full counts for short queries remain. The API's `count_ms` separates counting from the existing search timing fields.
+
+**Activate safely:** save prompts/workflows, then restart Forge and reload the browser at your own chosen time. Fixes 1–6 are JavaScript and activate after a page reload; fix 7 is Python and needs the next Forge start. A browser reload alone cannot replace running Python code. Updates do not restart or reload automatically. Saved settings, CSV order, dictionary bytes, workflow format and dependencies remain intact.
+
+**Validation and limits:** local Windows tests passed 156 Python tests, skipped one platform-specific case, and passed 119 subtests and 13 JS scripts. Isolated Chrome covered 14 IME/Cleaning cases and eight native weight-edit/Undo cases; this is separate from live Forge/Gradio, native OS IME and real Queue acceptance. Old/new responses matched across 1,728 combinations and eight searches over 447,632 real dictionary rows. CPU count-only medians changed from about 111 to 0.04 ms for temple and 113 to 1.31 ms for blue (three samples each; index preparation, ranking and rendering excluded). Initial short-query full scans remain; these are not keystroke-to-paint guarantees.
+
+- Use `Ctrl + Up / Down` for `0.05` steps or `Ctrl + Wheel` for `0.10` steps on a normal prompt tag.
+- The selected text, or the comma-delimited tag at the caret, is adjusted. A weight of `1.00` returns to plain text; the supported range is `-20.00` to `10.00`.
 - LoRA, LyCORIS, Embedding, Wildcard, Dynamic Prompt, `$...` syntax, square brackets, and active IME composition are left unchanged.
 - This feature is available on the current `main`. The tagged v1.2.0 Release ZIP is fixed and does not include this later change.
 

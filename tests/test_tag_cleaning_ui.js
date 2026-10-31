@@ -10,13 +10,16 @@ const source = fs.readFileSync(
     "utf8",
 );
 
-function loadHook(cleaningEnabled, {failAt = 0} = {}) {
+function loadHook(cleaningEnabled, {failAt = 0, deferred = false, renderStep = Infinity} = {}) {
     let fetchCount = 0;
     const requests = [];
+    const pending = [];
+    const signals = [];
     const errors = [];
     let applyClick = null;
     let enabledChange = null;
     const checkbox = {checked: cleaningEnabled};
+    let nodes = [];
     const context = {
         console: {info() {}, debug(...args) {errors.push(args);}},
         document: {
@@ -27,27 +30,40 @@ function loadHook(cleaningEnabled, {failAt = 0} = {}) {
             },
             getElementById() { return {}; },
         },
+        AbortController,
         fetch: async (_url, options) => {
             fetchCount += 1;
             const items = JSON.parse(options.body).items;
             requests.push(items);
-            if (items.length > 250 || fetchCount === failAt) {
-                return {ok: false, status: items.length > 250 ? 422 : 503, statusText: "test failure"};
-            }
-            return {ok: true, json: async () => ({
-                enabled: true, ready: true, database_id: "test-database",
-                results: items.map(item => ({requested_tag: item.tag, match: null})),
-            })};
+            signals.push(options.signal);
+            const response = items.length > 250 || fetchCount === failAt
+                ? {ok: false, status: items.length > 250 ? 422 : 503, statusText: "test failure"}
+                : {ok: true, json: async () => ({
+                    enabled: true, ready: true, database_id: "test-database",
+                    results: items.map(item => ({requested_tag: item.tag, match: null})),
+                })};
+            if (deferred) return new Promise(resolve => pending.push(() => resolve(response)));
+            return response;
         },
         getTextAreaIdentifier: () => "",
         gradioApp: () => ({
             querySelector(selector) {
-                return selector.includes("tacjp_cleaningEnabled") ? checkbox : null;
+                if (selector.includes("tacjp_cleaningEnabled")) return checkbox;
+                return selector.startsWith(".autocompleteResults") ? {querySelectorAll: () => nodes} : null;
             },
             querySelectorAll() { return []; },
         }),
         setTimeout(callback) { callback(); },
-        addResultsToList: () => "original-output",
+        addResultsToList(_area, results, _word, reset) {
+            if (reset) {
+                nodes.forEach(node => {node.isConnected = false;});
+                nodes = [];
+            }
+            const end = Math.min(results.length, nodes.length + renderStep);
+            while (nodes.length < end) nodes.push({isConnected: true,
+                querySelectorAll: () => [], querySelector: () => null});
+            return "original-output";
+        },
     };
     vm.runInNewContext(
         `const opts = {tacjp_cleaningEnabled: ${cleaningEnabled}}; `
@@ -56,14 +72,16 @@ function loadHook(cleaningEnabled, {failAt = 0} = {}) {
     );
     return {
         requests,
+        signals,
+        reply(index = 0) {pending[index]();},
         errors,
         call(results = [{
                 text: "pink_hair",
                 type: 1,
                 category: 0,
                 categoryScheme: "danbooru",
-            }]) {
-            const output = context.addResultsToList({}, results);
+            }], reset = true) {
+            const output = context.addResultsToList({}, results, "", reset);
             return {output, fetchCount};
         },
         settle() {return new Promise(resolve => setImmediate(resolve));},
@@ -133,9 +151,69 @@ function candidate(index) {
     await failed.settle();
     assert.deepEqual(failed.requests.map(items => items.length), [250, 1, 1], "only the failed batch needs retrying");
 
+    // A transport may ignore abort: success and failure still need a generation check.
+    for (const failAt of [0, 1]) {
+        const hook = loadHook(true, {deferred: true, failAt});
+        hook.call(); hook.apply(false);
+        assert.equal(hook.signals[0].aborted, true);
+        hook.reply(); await hook.settle();
+        assert.equal(hook.errors.length, 0);
+        hook.apply(true); hook.call();
+        assert.equal(hook.requests.length, 2, "stale completion must not seed the new cache");
+        hook.reply(1); await hook.settle();
+    }
+    {
+        const hook = loadHook(true, {deferred: true});
+        hook.call(); hook.apply(false); hook.apply(true);
+        hook.reply(); await hook.settle(); hook.call();
+        assert.equal(hook.requests.length, 2, "OFF to ON must not revive the first ON generation");
+        hook.reply(1); await hook.settle(); hook.call();
+        assert.equal(hook.requests.length, 2, "current responses still populate the cache");
+    }
+    {
+        const hook = loadHook(true, {deferred: true});
+        hook.call(Array.from({length: 501}, (_, index) => candidate(index)));
+        hook.apply(false); hook.reply(); await hook.settle();
+        assert.equal(hook.requests.length, 1, "disabling stops later batches");
+    }
+
     const off = loadHook(false);
     off.call(results);
     await off.settle();
     assert.equal(off.requests.length, 0);
+    {
+        const hook = loadHook(true, {deferred: true});
+        const first = Array.from({length: 20}, (_, i) => candidate(i));
+        hook.call(first); hook.call(first);
+        assert.equal(hook.requests.length, 1, "pending requests are shared across redraws");
+        hook.call(Array.from({length: 20}, (_, i) => candidate(i + 10)));
+        assert.deepEqual(hook.requests.map(items => items.length), [20, 10]);
+        hook.reply(0);hook.reply(1);await hook.settle();
+        hook.call(first);assert.equal(hook.requests.length, 2);
+    }
+    {
+        const hook = loadHook(true, {deferred: true, failAt: 1});
+        hook.call();hook.call();assert.equal(hook.requests.length, 1);
+        hook.reply();await hook.settle();hook.call();
+        assert.equal(hook.requests.length, 2, "a failed shared lookup can be retried");
+        hook.reply(1);await hook.settle();
+    }
+    {
+        const hook = loadHook(true, {renderStep: 50});
+        const results = Array.from({length: 1000}, (_, i) => candidate(i));
+        hook.call(results);await hook.settle();
+        assert.deepEqual(hook.requests.map(items => items.length), [50]);
+        hook.call(results, false);await hook.settle();
+        assert.deepEqual(hook.requests[1].map(item => item.tag), results.slice(50, 100).map(item => item.text));
+        hook.call(results);await hook.settle();
+        assert.equal(hook.requests.length, 2, "reset draws use cached visible rows");
+    }
+    {
+        const hook = loadHook(true, {deferred: true});
+        hook.call();hook.apply(false);hook.apply(true);hook.call();
+        hook.reply(0);await hook.settle();hook.call();
+        assert.equal(hook.requests.length, 2, "old completion cannot release a new generation's shared lookup");
+        hook.reply(1);await hook.settle();
+    }
     console.log("tag cleaning UI tests passed (OFF, batches, cache, deduplication, failure retry)");
 })().catch(error => {console.error(error); process.exitCode = 1;});

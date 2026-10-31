@@ -5,6 +5,7 @@ from __future__ import annotations
 import heapq
 import re
 import time
+from collections import OrderedDict
 from typing import Any, Sequence
 
 try:
@@ -242,6 +243,58 @@ class FastSearchQueryMixin:
             return tuple(intersection), False
         return (), False
 
+    def _matched_count(
+        self,
+        index: dict[str, Any],
+        query: str,
+        search_aliases: bool,
+        search_translations: bool,
+        candidate_ids: Sequence[int] | None,
+        fallback_count: int,
+    ) -> int:
+        blobs = index["search_blobs"]
+        field_groups = index.get("field_groups")
+        fields = index.get("fields")
+        grouped_blobs = bool(blobs) and isinstance(blobs[0], tuple) and "\x1f" not in query
+        if not grouped_blobs and field_groups is None and fields is None:
+            return fallback_count
+
+        # Owned by this resident index: file changes, eviction and clear discard
+        # these counts. They are not written to the persistent index files.
+        key = (query, bool(search_aliases), bool(search_translations))
+        with self._lock:
+            counts = index.setdefault("_matched_counts", OrderedDict())
+            cached = counts.get(key)
+            if cached is not None:
+                counts.move_to_end(key)
+                return cached
+
+        if grouped_blobs:
+            groups = blobs if candidate_ids is None else (blobs[row_id] for row_id in candidate_ids)
+            count = sum(
+                query in tag_blob
+                or (search_aliases and query in alias_blob)
+                or (search_translations and query in translation_blob)
+                for tag_blob, alias_blob, translation_blob in groups
+            )
+        elif field_groups is not None:
+            groups = field_groups if candidate_ids is None else (field_groups[row_id] for row_id in candidate_ids)
+            count = sum(
+                query in tag_field
+                or (search_aliases and any(query in value for value in alias_fields))
+                or (search_translations and any(query in value for value in translation_fields))
+                for tag_field, alias_fields, translation_fields in groups
+            )
+        else:
+            selected_fields = fields if candidate_ids is None else (fields[row_id] for row_id in candidate_ids)
+            count = sum(any(query in value for value in values) for values in selected_fields)
+        with self._lock:
+            counts[key] = count
+            counts.move_to_end(key)
+            while len(counts) > 128:
+                counts.popitem(last=False)
+        return count
+
     def search(self, request: SearchRequest) -> dict[str, Any]:
         started = time.perf_counter()
         query = normalize_search(
@@ -269,6 +322,7 @@ class FastSearchQueryMixin:
                 "original_build_ms": 0.0,
                 "restore_ms": 0.0,
                 "search_only_ms": 0.0,
+                "count_ms": 0.0,
                 "search_ms": 0.0,
             }
 
@@ -534,28 +588,13 @@ class FastSearchQueryMixin:
             2,
         )
         original_build_ms = index.get("build_ms", 0.0)
-        # Count merged rows once, independently of the top-k ranking shortcut.
-        # Normalized field groups preserve alias/translation switches and avoid
-        # counting a row twice when multiple fields contain the same query.
-        if blobs and isinstance(blobs[0], tuple) and "\x1f" not in query:
-            matched_count = sum(
-                query in tag_blob
-                or (request.search_aliases and query in alias_blob)
-                or (request.search_translations and query in translation_blob)
-                for tag_blob, alias_blob, translation_blob in blobs
-            )
-        elif field_groups is not None:
-            matched_count = sum(
-                query in tag_field
-                or (request.search_aliases and any(query in value for value in alias_fields))
-                or (request.search_translations and any(query in value for value in translation_fields))
-                for tag_field, alias_fields, translation_fields in field_groups
-            )
-        else:
-            matched_count = sum(
-                any(query in value for value in values)
-                for values in fields
-            ) if fields is not None else len(scored)
+        count_started = time.perf_counter()
+        matched_count = self._matched_count(
+            index, query, request.search_aliases, request.search_translations,
+            candidate_ids if candidate_set_is_complete and "\x1f" not in query else None,
+            len(scored),
+        )
+        count_ms = round((time.perf_counter() - count_started) * 1000, 2)
         return {
             "results": output,
             "count": len(output),
@@ -566,6 +605,7 @@ class FastSearchQueryMixin:
             "original_build_ms": original_build_ms,
             "restore_ms": load_timings.get("restore_ms", 0.0),
             "search_only_ms": search_only_ms,
+            "count_ms": count_ms,
             "search_ms": round(
                 (time.perf_counter() - started) * 1000,
                 2,

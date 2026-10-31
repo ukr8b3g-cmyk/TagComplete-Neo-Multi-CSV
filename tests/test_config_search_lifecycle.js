@@ -29,6 +29,7 @@ async function fixture() {
     vm.createContext(context);
     const source = fs.readFileSync(path.join(root, 'javascript/tagAutocomplete.js'), 'utf8');
     vm.runInContext(source.slice(source.indexOf('async function loadTags(c)'), source.indexOf('// Create the result list div')), context);
+    vm.runInContext(source.slice(source.indexOf('let pendingTagLoad ='), source.indexOf('async function autocomplete(')), context);
     vm.runInContext(fs.readFileSync(path.join(root, 'javascript/zzzz_tacjp_fast_search.js'), 'utf8'), context);
     await context.syncOptions();
     return {context, pending, loads, parser: context.PARSERS[0]};
@@ -86,5 +87,15 @@ const failure = {ok: false, status: 500, statusText: 'old error'};
         assert.equal(c.translations.has('obsolete_legacy'), false);
         assert.equal(c.allTags.length, 0);
     }
-    console.log('config search lifecycle: stale success/failure, ABA, pre-hook response, single reload and real fallback passed');
+    {
+        const f = await fixture(), c = f.context;let reply;let calls = 0;
+        c.postTacAPI = () => {calls++;return new Promise(resolve => {reply = resolve;});};
+        c.opts.tacjp_searchEngine = 'Legacy browser';
+        const changed = c.syncOptions();
+        const typed = c.ensureTagsLoaded();
+        assert.equal(calls, 1, 'typing during a settings reload shares its load');
+        reply({rows: [['current', 0, 1, '', '']]});
+        await Promise.all([changed, typed]);assert.equal(c.tagsLoaded, true);
+    }
+    console.log('config search lifecycle: stale success/failure, ABA, shared reload and real fallback passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

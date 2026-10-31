@@ -6,6 +6,23 @@
     let databaseId = "";
     let installed = false;
     let warnedMissingDatabase = false;
+    let settingsGeneration = 0;
+    const activeRequests = new Set();
+    const pendingLookups = new Map();
+
+    function invalidateLookups() {
+        settingsGeneration += 1;
+        for (const controller of activeRequests) controller.abort();
+        activeRequests.clear();
+        pendingLookups.clear();
+        cache.clear();
+        databaseId = "";
+        warnedMissingDatabase = false;
+    }
+
+    function current(generation) {
+        return generation === settingsGeneration && enabled();
+    }
 
     const css = `
         .acCleaningBadge {
@@ -42,6 +59,7 @@
             if (!event.target.matches?.(
                 "#setting_tacjp_cleaningEnabled input[type='checkbox']"
             )) return;
+            invalidateLookups();
             if (!event.target.checked) {
                 gradioApp().querySelectorAll(
                     ".acCleaningBadge, .acCleaningSuggestions"
@@ -50,6 +68,7 @@
         });
         document.addEventListener("click", event => {
             if (!event.target.closest?.("#settings_submit")) return;
+            invalidateLookups();
             setTimeout(() => gradioApp()
                 .querySelector("#refresh_tacjp_cleaningStatus")?.click(), 0);
         });
@@ -77,14 +96,20 @@
         return scheme === "danbooru";
     }
 
-    async function fetchUnknown(results) {
+    async function fetchUnknown(results, generation) {
+        if (!current(generation)) return;
         const unique = [];
         const seen = new Set();
+        const waiting = new Set();
         for (const result of results) {
             if (!eligible(result)) continue;
             const key = keyFor(result);
             if (!key || cache.has(key) || seen.has(key)) continue;
             seen.add(key);
+            if (pendingLookups.has(key)) {
+                waiting.add(pendingLookups.get(key));
+                continue;
+            }
             unique.push({
                 key,
                 tag: String(result.text || ""),
@@ -93,42 +118,63 @@
                     : null,
             });
         }
-        if (unique.length === 0) return;
-
-        // Match CleaningLookupBody's per-request limit without dropping candidates.
-        for (let start = 0; start < unique.length; start += LOOKUP_BATCH_SIZE) {
-            const batch = unique.slice(start, start + LOOKUP_BATCH_SIZE);
-            const response = await fetch("tacjp/v1/cleaning/lookup", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    items: batch.map(item => ({tag: item.tag, category: item.category})),
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            const data = await response.json();
-            if (!data?.enabled) return;
-            if (!data?.ready) {
-                if (!warnedMissingDatabase) {
-                    warnedMissingDatabase = true;
-                    console.info(
-                        "[TagComplete Neo Multi-CSV] Tag Cleaning is enabled but its SQLite "
-                        + "database is not ready. Use Settings > Tag Autocomplete / Multi-CSV "
-                        + "> Tag Cleaning database update."
-                    );
+        if (unique.length > 0) {
+            const task = lookupItems(unique, generation).finally(() => {
+                for (const item of unique) {
+                    if (pendingLookups.get(item.key) === task) pendingLookups.delete(item.key);
                 }
-                return;
-            }
-            const nextDatabaseId = String(data.database_id || "");
-            if (databaseId && nextDatabaseId && nextDatabaseId !== databaseId) cache.clear();
-            if (nextDatabaseId) databaseId = nextDatabaseId;
-            const rows = Array.isArray(data.results) ? data.results : [];
-            rows.forEach((row, index) => {
-                const key = batch[index]?.key;
-                if (key) cache.set(key, row?.match || null);
             });
+            for (const item of unique) pendingLookups.set(item.key, task);
+            waiting.add(task);
+        }
+        await Promise.all(waiting);
+    }
+
+    async function lookupItems(unique, generation) {
+        const controller = new AbortController();
+        activeRequests.add(controller);
+        try {
+            // Match CleaningLookupBody's per-request limit without dropping candidates.
+            for (let start = 0; start < unique.length; start += LOOKUP_BATCH_SIZE) {
+                if (!current(generation)) return;
+                const batch = unique.slice(start, start + LOOKUP_BATCH_SIZE);
+                const response = await fetch("tacjp/v1/cleaning/lookup", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        items: batch.map(item => ({tag: item.tag, category: item.category})),
+                    }),
+                });
+                if (!current(generation)) return;
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                if (!current(generation)) return;
+                if (!data?.enabled) return;
+                if (!data?.ready) {
+                    if (!warnedMissingDatabase) {
+                        warnedMissingDatabase = true;
+                        console.info(
+                            "[TagComplete Neo Multi-CSV] Tag Cleaning is enabled but its SQLite "
+                            + "database is not ready. Use Settings > Tag Autocomplete / Multi-CSV "
+                            + "> Tag Cleaning database update."
+                        );
+                    }
+                    return;
+                }
+                const nextDatabaseId = String(data.database_id || "");
+                if (databaseId && nextDatabaseId && nextDatabaseId !== databaseId) cache.clear();
+                if (nextDatabaseId) databaseId = nextDatabaseId;
+                const rows = Array.isArray(data.results) ? data.results : [];
+                rows.forEach((row, index) => {
+                    const key = batch[index]?.key;
+                    if (key) cache.set(key, row?.match || null);
+                });
+            }
+        } finally {
+            activeRequests.delete(controller);
         }
     }
 
@@ -137,8 +183,8 @@
             .forEach(node => node.remove());
     }
 
-    function annotate(li, result) {
-        if (!li?.isConnected || !eligible(result)) return;
+    function annotate(li, result, generation) {
+        if (!current(generation) || !li?.isConnected || !eligible(result)) return;
         clearAnnotation(li);
         const info = cache.get(keyFor(result));
         if (!info) return;
@@ -167,12 +213,11 @@
         }
     }
 
-    function listItemsFor(textArea, resultCount) {
+    function listItemsFor(textArea) {
         try {
             const textAreaId = getTextAreaIdentifier(textArea);
             const resultDiv = gradioApp().querySelector(`.autocompleteResults${textAreaId}`);
-            const nodes = Array.from(resultDiv?.querySelectorAll?.("ul > li") || []);
-            return nodes.slice(Math.max(0, nodes.length - resultCount));
+            return Array.from(resultDiv?.querySelectorAll?.("ul > li") || []);
         } catch {
             return [];
         }
@@ -189,18 +234,22 @@
         installSettingsStatusRefresh();
         const original = addResultsToList;
         addResultsToList = function tagCleaningAddResults(textArea, results, ...rest) {
+            const start = rest[1] ? 0 : listItemsFor(textArea).length;
             const output = original.call(this, textArea, results, ...rest);
             if (!enabled() || !Array.isArray(results) || results.length === 0) {
                 return output;
             }
-            const resultSnapshot = results.slice();
-            const nodes = listItemsFor(textArea, resultSnapshot.length);
-            resultSnapshot.forEach((result, index) => annotate(nodes[index], result));
-            fetchUnknown(resultSnapshot)
+            const nodes = listItemsFor(textArea).slice(start);
+            const resultSnapshot = results.slice(start, start + nodes.length);
+            const generation = settingsGeneration;
+            resultSnapshot.forEach((result, index) => annotate(nodes[index], result, generation));
+            fetchUnknown(resultSnapshot, generation)
                 .then(() => {
-                    resultSnapshot.forEach((result, index) => annotate(nodes[index], result));
+                    if (!current(generation)) return;
+                    resultSnapshot.forEach((result, index) => annotate(nodes[index], result, generation));
                 })
                 .catch(error => {
+                    if (!current(generation) || error?.name === "AbortError") return;
                     console.debug(
                         "[TagComplete Neo Multi-CSV] Tag Cleaning lookup failed",
                         error,

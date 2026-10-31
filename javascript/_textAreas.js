@@ -121,52 +121,73 @@ function getTextAreas() {
     return textAreas;
 }
 
+const onDemandObservers = new WeakMap();
 function addOnDemandObservers(setupFunction) {
+    function observeAccordion(acc, entry) {
+        const existing = onDemandObservers.get(acc);
+        if (existing) {
+            existing.entries.add(entry);
+            existing.setup = setupFunction;
+            return;
+        }
+        const record = {entries: new Set([entry]), setup: setupFunction};
+        const observer = new MutationObserver(mutations => {
+            let addedElements = false;
+            for (const mutation of mutations) {
+                if (mutation.type !== "childList") continue;
+                for (const child of mutation.removedNodes) {
+                    if (child.nodeType !== 1) continue;
+                    for (const node of [child, ...child.querySelectorAll(".gradio-accordion")]) {
+                        const removed = onDemandObservers.get(node);
+                        if (removed && !node.isConnected) {
+                            removed.observer.disconnect();
+                            onDemandObservers.delete(node);
+                        }
+                    }
+                }
+                for (const child of mutation.addedNodes) {
+                    if (child.nodeType !== 1) continue;
+                    addedElements = true;
+                    const accordions = [...child.querySelectorAll(".gradio-accordion")];
+                    if (child.classList.contains("gradio-accordion")) accordions.unshift(child);
+                    for (const accordion of accordions) {
+                        for (const owner of record.entries) observeAccordion(accordion, owner);
+                    }
+                }
+            }
+            if (!acc.isConnected) {
+                observer.disconnect();
+                onDemandObservers.delete(acc);
+                return;
+            }
+            if (!addedElements) return;
+            const areas = new Set();
+            for (const owner of record.entries) {
+                if (owner.hasIds) {
+                    gradioApp().querySelectorAll(owner.selectors.join(", ")).forEach(area => areas.add(area));
+                } else {
+                    const base = gradioApp().querySelector(owner.base);
+                    if (!base) continue;
+                    base.querySelectorAll("textarea, input[type='text']").forEach(area => {
+                        if ([...area.parentElement.childNodes].some(label => owner.selectors.includes(label.innerText))) {
+                            areas.add(area);
+                        }
+                    });
+                }
+            }
+            areas.forEach(area => record.setup(area));
+        });
+        record.observer = observer;
+        onDemandObservers.set(acc, record);
+        observer.observe(acc, {childList: true});
+    }
     for (const [key, entry] of Object.entries(thirdParty)) {
         if (!entry.onDemand) continue;
 
         let base = gradioApp().querySelector(entry.base);
         if (!base) continue;
 
-        let accordions = [...base?.querySelectorAll(".gradio-accordion")];
-        if (!accordions) continue;
-
-        accordions.forEach(acc => {
-            let accObserver = new MutationObserver((mutationList, observer) => {
-                for (const mutation of mutationList) {
-                    if (mutation.type === "childList") {
-                        let newChildren = mutation.addedNodes;
-                        if (!newChildren) {
-                            accObserver.disconnect();
-                            continue;
-                        }
-
-                        newChildren.forEach(child => {
-                            if (child.classList.contains("gradio-accordion") || child.querySelector(".gradio-accordion")) {
-                                let newAccordions = [...child.querySelectorAll(".gradio-accordion")];
-                                newAccordions.forEach(nAcc => accObserver.observe(nAcc, { childList: true }));
-                            }
-                        });
-
-                        if (entry.hasIds) { // If the entry has proper ids, we can just select them
-                            [...gradioApp().querySelectorAll(entry.selectors.join(", "))].forEach(x => setupFunction(x));
-                        } else { // Otherwise, we have to find the text areas by their adjacent labels
-                            let base = gradioApp().querySelector(entry.base);
-
-                            // Safety check
-                            if (!base) continue;
-
-                            let allTextAreas = [...base.querySelectorAll("textarea, input[type='text']")];
-
-                            // Filter the text areas where the adjacent label matches one of the selectors
-                            let matchingTextAreas = allTextAreas.filter(ta => [...ta.parentElement.childNodes].some(x => entry.selectors.includes(x.innerText)));
-                            matchingTextAreas.forEach(x => setupFunction(x));
-                        }
-                    }
-                }
-            });
-            accObserver.observe(acc, { childList: true });
-        });
+        base.querySelectorAll(".gradio-accordion").forEach(acc => observeAccordion(acc, entry));
     };
 }
 

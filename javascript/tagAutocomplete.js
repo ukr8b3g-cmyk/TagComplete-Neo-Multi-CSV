@@ -466,10 +466,8 @@ async function syncOptions() {
         translations.clear();
         extras = [];
         tagsLoaded = false;
-        await loadTags(newCFG);
+        await ensureTagsLoaded();
         if (TAC_CFG !== newCFG) return;
-        if (newCFG.useIndexedSearch && allTags.length > 0) await buildTagIndex();
-        tagsLoaded = true;
     }
 
     if (!dataChanged && previousCFG && newCFG.useIndexedSearch !== previousCFG.useIndexedSearch) {
@@ -1507,19 +1505,29 @@ function checkKeywordInsertionUndo(textArea, event) {
     }
 }
 
+let pendingTagLoad = null;
 async function ensureTagsLoaded() {
     if (tagsLoaded) return;
     if (!TAC_CFG) return;
     const config = TAC_CFG;
-    allTags = [];
-    await loadTags(config);
-    if (TAC_CFG !== config) return;
-    if (config.useIndexedSearch && allTags.length > 0) {
-        await buildTagIndex();
+    if (pendingTagLoad?.config === config) return pendingTagLoad.promise;
+    const load = {config, promise: null};
+    pendingTagLoad = load;
+    load.promise = (async () => {
+        allTags = [];
+        await loadTags(config);
+        if (TAC_CFG !== config) return;
+        if (config.useIndexedSearch && allTags.length > 0) {
+            await buildTagIndex();
+        }
+        // An intentionally empty CSV selection is also a completed load.
+        if (TAC_CFG === config) tagsLoaded = true;
+    })();
+    try {
+        await load.promise;
+    } finally {
+        if (pendingTagLoad === load) pendingTagLoad = null;
     }
-    // Mark the load complete even when the user intentionally selected no tag
-    // files, otherwise autocomplete would recursively retry forever.
-    tagsLoaded = true;
 }
 
 async function autocomplete(textArea, prompt, fixedTag = null, generation = null) {
@@ -1909,9 +1917,14 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         else if (Number.isSafeInteger(candidate._tacjpHitCount)) hitSummary.total += candidate._tacjpHitCount - candidate.length;
     }
 
-    // Slice if the user has set a max result count and we are not in a extra networks / wildcard list
-    if (!TAC_CFG.showAllResults && normalTags) {
-        results = results.slice(0, TAC_CFG.maxResults + resultCountBeforeNormalTags);
+    // Apply the display limit after ranking, including normal tags from parsers.
+    // Dedicated network/wildcard/embedding lists keep their own result policy.
+    const normalTypes = [ResultType.tag, ResultType.extra];
+    if (!TAC_CFG.showAllResults && (normalTags || results.some(result => normalTypes.includes(result.type)))) {
+        let remaining = TAC_CFG.maxResults;
+        results = results.filter(result => !normalTypes.includes(result.type) || remaining-- > 0);
+        resultCountBeforeNormalTags = Math.min(resultCountBeforeNormalTags,
+            results.filter(result => !normalTypes.includes(result.type)).length);
     }
     globalThis.TACJPFastSearchTiming?.mark("sort_done", timingSequence);
 
@@ -1938,6 +1951,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
 
 const tagWeightWheelLast = new WeakMap();
 const tagWeightComposingAreas = new WeakSet();
+const autocompleteCompositionKeyPending = new WeakMap();
 const TAG_WEIGHT_KEY_STEP = 0.05;
 const TAG_WEIGHT_WHEEL_STEP = 0.1;
 
@@ -1965,18 +1979,29 @@ function getTagWeightShortcutResult(textArea, direction, step) {
 }
 
 function applyTagWeightShortcut(textArea, result) {
-    if (!result) return false;
+    if (!result || !canApplyTagWeightShortcut(textArea)) return false;
+    const doc = textArea.ownerDocument || document;
+    if (typeof doc.execCommand !== "function") return false;
+    const before = textArea.value;
+    if (before === result.value) return false;
+    const start = textArea.selectionStart, end = textArea.selectionEnd;
+    const scrollTop = textArea.scrollTop, scrollLeft = textArea.scrollLeft;
 
-    textArea.value = result.value;
-    textArea.focus();
-    textArea.setSelectionRange(result.start, result.end);
-
-    if (typeof updateInput === "function") {
-        updateInput(textArea);
-    } else {
-        textArea.dispatchEvent(new Event("input", {bubbles: true}));
+    textArea.setSelectionRange(result.start, before.length - (result.value.length - result.end));
+    try {
+        // Native input also synchronizes the Gradio textbox; do not send it twice.
+        doc.execCommand("insertText", false, result.replacement);
+    } catch {
+        textArea.setSelectionRange(start, end);
+        textArea.scrollTop = scrollTop;
+        textArea.scrollLeft = scrollLeft;
+        return false;
     }
-
+    const applied = textArea.value === result.value;
+    textArea.setSelectionRange(applied ? result.start : start, applied ? result.end : end);
+    textArea.scrollTop = scrollTop;
+    textArea.scrollLeft = scrollLeft;
+    if (!applied) return false;
     hideResults(textArea);
     return true;
 }
@@ -2038,6 +2063,11 @@ function handleTagWeightWheel(textArea, event) {
 }
 
 function navigateInList(textArea, event) {
+    if (tagWeightComposingAreas.has(textArea) || event.isComposing || event.keyCode === 229) return;
+    if (autocompleteCompositionKeyPending.has(textArea)) {
+        if (event.key === "Enter" || event.key === "Tab") return;
+        autocompleteCompositionKeyPending.delete(textArea);
+    }
     // Return if the function is deactivated in the UI or the current model is excluded due to white/blacklist settings
     if (!isEnabled()) return;
 
@@ -2223,6 +2253,12 @@ function addAutocompleteToArea(area) {
             if (!e.inputType && !tacSelfTrigger) return;
             tacSelfTrigger = false;
             const generation = nextAutocompleteGeneration(area);
+            if (e.isComposing || tagWeightComposingAreas.has(area)) {
+                debouncedAutocomplete.cancel();
+                debouncedUpdateRuby.cancel();
+                hideResults(area);
+                return;
+            }
             globalThis.TACJPFastSearchTiming?.input();
             if (globalThis.TACJPFastSearchTiming?.enabled()) {
                 queueMicrotask(() => {
@@ -2231,12 +2267,6 @@ function addAutocompleteToArea(area) {
                 setTimeout(() => {
                     globalThis.TACJPFastSearchTiming?.mark("main_thread_available");
                 }, 0);
-            }
-
-            // Block hide we are composing (IME), so enter doesn't close the results
-            if (e.isComposing) {
-                hideBlocked = true;
-                setTimeout(() => { hideBlocked = false; }, 100);
             }
 
             const isDelete = e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward';
@@ -2274,13 +2304,32 @@ function addAutocompleteToArea(area) {
         );
         area.addEventListener('compositionstart', () => {
             tagWeightComposingAreas.add(area);
+            autocompleteCompositionKeyPending.delete(area);
+            nextAutocompleteGeneration(area);
+            debouncedAutocomplete.cancel();
+            debouncedUpdateRuby.cancel();
+            hideResults(area);
         });
         // CompositionEnd fires after the user has finished IME composing
         // We need to block hide here to prevent the enter key from insta-closing the results
         area.addEventListener('compositionend', () => {
             tagWeightComposingAreas.delete(area);
+            const generation = nextAutocompleteGeneration(area);
+            autocompleteCompositionKeyPending.set(area, generation);
+            debouncedUpdateRuby();
+            void debouncedAutocomplete(generation);
             hideBlocked = true;
-            setTimeout(() => { hideBlocked = false; }, 100);
+            setTimeout(() => {
+                hideBlocked = false;
+                if (autocompleteCompositionKeyPending.get(area) === generation) {
+                    autocompleteCompositionKeyPending.delete(area);
+                }
+            }, 100);
+        });
+        area.addEventListener('keyup', e => {
+            if (!tagWeightComposingAreas.has(area) && (e.key === "Enter" || e.key === "Tab" || e.keyCode === 229)) {
+                autocompleteCompositionKeyPending.delete(area);
+            }
         });
 
         // Add class so we know we've already added the listeners

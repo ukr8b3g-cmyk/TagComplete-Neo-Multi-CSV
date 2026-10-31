@@ -135,7 +135,13 @@ console.log("tacjp_core.js tests passed");
     const area = {value: "blue hair", selectionStart: 4, selectionEnd: 4,
         focus() {}, setSelectionRange(start, end) {this.selectionStart = start; this.selectionEnd = end;}};
     let clock = 100;
-    const context = {TACJPCore: core, document: {activeElement: area}, isEnabled: () => true,
+    const document = {activeElement: area, execCommand(command, _ui, text) {
+        assert.equal(command, "insertText");
+        area.value = area.value.slice(0, area.selectionStart) + text + area.value.slice(area.selectionEnd);
+        return true;
+    }};
+    area.ownerDocument = document;
+    const context = {TACJPCore: core, document, isEnabled: () => true,
         performance: {now: () => clock}, updateInput() {}, hideResults() {}};
     vm.runInNewContext(source.slice(source.indexOf("const tagWeightWheelLast ="),
         source.indexOf("function navigateInList(")), context);
