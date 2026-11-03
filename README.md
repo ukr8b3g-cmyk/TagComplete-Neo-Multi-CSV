@@ -14,7 +14,7 @@ New tag selections default to tags_merged_dedup.csv only. Choose additional dict
 
 # TagComplete Neo Multi-CSV
 
-**最新リリース: v1.2.0**
+**最新リリース: v1.2.1**
 
 **[English](#english)**
 
@@ -45,14 +45,25 @@ controls are intentionally hidden in the current release.
 
 ### リリースと旧バージョン
 
-- **最新版:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
-- **v1.2.0 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.0.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.0.zip)
+- **最新版:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
+- **v1.2.1 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.1.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.1.zip)
+- **旧版v1.2.0:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
 - **旧バージョン:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
 `Code` → `Download ZIP`と`Install from URL`は、v1.2.0以降の修正を含む最新mainを取得します。
-上記のRelease ZIPはv1.2.0固定で、今回の①〜⑦は含みません。
+v1.2.1には以下の①〜⑦と新版辞書を含みます。旧v1.2.0 ZIPは固定されており、これらを含みません。
 
 ### What's New
+
+#### v1.2.1 — 2026-11-03：タグ・翻訳CSV更新
+
+タグ辞書`tags_merged_dedup.csv`を503,976行へ更新しました（従来447,638行から56,338行追加）。翻訳辞書`merged_translations_dedup.csv`はヘッダーを除き55,570件です。同じ2ファイルをNeo版とComfyUI JP Assist版に収録します。
+
+追加のON/OFF設定はありません。タグCSVと翻訳CSVは別々に選択し、保存済みの選択・順序を維持してください。既にこの2ファイルを選択している場合は選び直す必要はありません。辞書を再読み込みし、必要に応じて作業保存後にブラウザーを再読み込みしてください。キャッシュが残る場合は利用者のタイミングで次回本体起動時に反映できます。更新処理は本体の再起動や設定変更を行いません。
+
+Hugging Faceからの自動取得を追加・再有効化する変更ではありません。既存設定、ワークフロー、検索／挿入方法、他のCSVは維持します。UTF-8とCSV構文、両版の実際の辞書読込関数、公開ブロブと正本のバイト一致を確認しました。今回の新版辞書を使った稼働画面・OS IME・GPU生成は未検証です。
+
+Neoのv1.2.1にはv1.2.0以降の入力保護・重複処理・候補上限・重みUndo・正確な検索件数の軽量化（下記①〜⑦）も含みます。
 
 #### 2026-10-31：入力保護・重複処理・Undo・検索件数の改善
 
@@ -681,14 +692,25 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 ### Releases and previous versions
 
-- **Latest:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
-- **Direct v1.2.0 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.0.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.0.zip)
+- **Latest:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
+- **Direct v1.2.1 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.1.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.1.zip)
+- **Previous v1.2.0:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
 - **Previous:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
 `Code` → `Download ZIP` and `Install from URL` provide current main, including fixes made after v1.2.0.
-The direct Release ZIP remains fixed to v1.2.0 and does not include fixes 1–7 above.
+The v1.2.1 archive includes fixes 1–7 and the updated dictionaries. The old v1.2.0 archive remains fixed and does not include them.
 
 ### What's New
+
+#### v1.2.1 — 2026-11-03: Updated tag and translation CSVs
+
+Updated `tags_merged_dedup.csv` to 503,976 rows, adding 56,338 to the previous 447,638. `merged_translations_dedup.csv` contains 55,570 data rows excluding its header. Both Neo and ComfyUI JP Assist ship the same two dictionary files.
+
+No new switch. Select tag and translation files separately and retain saved selections/order. Existing selections of these filenames need no change. Reload dictionaries and, when needed, save work before reloading the browser; remaining runtime caches can refresh on your next planned application start. This update does not restart the app or change settings. It does not add or re-enable Hugging Face automatic downloads. Saved settings, workflows, search/insertion behavior and other CSVs are preserved.
+
+Validated UTF-8/CSV syntax, both implementations' actual dictionary readers and exact source/public blob bytes. Live UI, native OS IME and GPU generation with the new dictionaries were not retested.
+
+The new v1.2.1 archive also includes fixes 1–7 below, accumulated since v1.2.0: input safety, shared work, candidate limits, weight Undo and exact-count optimization.
 
 #### 2026-10-31: input safety, shared work, Undo and exact match counting
 
