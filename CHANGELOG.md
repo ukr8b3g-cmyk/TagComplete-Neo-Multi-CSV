@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.3
+
+- Keep trailing punctuation and closing quotes when accepting a tag after a period. Replace a partially typed tag through the end of the word and keep its weight syntax.
+
 ## 1.2.2
 
 - Default to exact tag names and tag name prefixes before other matches. Keep saved candidate sort modes and exact hit counts.

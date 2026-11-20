@@ -14,7 +14,7 @@ New tag selections default to tags_merged_dedup.csv only. Choose additional dict
 
 # TagComplete Neo Multi-CSV
 
-**最新リリース: v1.2.2**
+**最新リリース: v1.2.3**
 
 **[English](#english)**
 
@@ -45,8 +45,9 @@ controls are intentionally hidden in the current release.
 
 ### リリースと旧バージョン
 
-- **最新版:** [v1.2.2](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.2)
-- **v1.2.2 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.2.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.2.zip)
+- **最新版:** [v1.2.3](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.3)
+- **v1.2.3 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.3.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.3.zip)
+- **旧版v1.2.2:** [v1.2.2](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.2)
 - **旧版v1.2.1:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
 - **旧版v1.2.0:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
 - **旧バージョン:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
@@ -55,6 +56,10 @@ controls are intentionally hidden in the current release.
 v1.2.1には以下の①〜⑦と新版辞書を含みます。旧v1.2.0 ZIPは固定されており、これらを含みません。
 
 ### What's New
+
+#### v1.2.3 — 2026-11-20 · 補完時に句読点と引用符を保持
+
+ピリオドの直後でタグを補完するとき、右側の感嘆符、疑問符、句点、閉じ引用符が残るようにしました。たとえば `sky.un!` の `un` の直後で `underwear` を選ぶと、`sky.underwear!` になります。更新後はWebUIを再読み込みしてください。
 
 #### v1.2.2 — 2026-11-20 · 先頭一致とピリオド直後の補完
 
@@ -705,8 +710,9 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 ### Releases and previous versions
 
-- **Latest:** [v1.2.2](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.2)
-- **Direct v1.2.2 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.2.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.2.zip)
+- **Latest:** [v1.2.3](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.3)
+- **Direct v1.2.3 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.3.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.3.zip)
+- **Previous v1.2.2:** [v1.2.2](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.2)
 - **Previous v1.2.1:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
 - **Previous v1.2.0:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
 - **Previous:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
@@ -715,6 +721,10 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 The v1.2.1 archive includes fixes 1–7 and the updated dictionaries. The old v1.2.0 archive remains fixed and does not include them.
 
 ### What's New
+
+#### v1.2.3 — 2026-11-20 · Preserve punctuation when accepting a suggestion
+
+Completing a tag immediately after a period now keeps trailing exclamation marks, question marks, sentence punctuation, and closing quotes. With the cursor after `un` in `sky.un!`, choosing `underwear` produces `sky.underwear!`. Reload the WebUI after updating.
 
 #### v1.2.2 — 2026-11-20 · Tag name prefixes and completion after a period
 

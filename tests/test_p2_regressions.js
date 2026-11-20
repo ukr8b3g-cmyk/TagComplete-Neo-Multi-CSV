@@ -122,8 +122,8 @@ async function punctuationTests() {
 }
 
 async function periodTests() {
-    async function run(input, enabled, caret = input.length) {
-        const {context, state} = contextForAutocomplete([["underwear", 0, 1, ""]]);
+    async function run(input, enabled, caret = input.length, candidate = "underwear") {
+        const {context, state} = contextForAutocomplete([[candidate, 0, 1, ""]]);
         if (enabled !== undefined) context.TAC_CFG.completeAfterPeriod = enabled;
         const area = {value: input, selectionStart: caret, selectionEnd: caret};
         const queries = [];
@@ -166,7 +166,7 @@ async function periodTests() {
         assert.deepEqual((await run("sky.un, un", enabled)).queries, ["un"]);
     }
 
-    for (const [input, caret, expected, appendSeparators = false] of [
+    for (const [input, caret, expected, appendSeparators = false, candidate = "underwear"] of [
         ["sky.un", 6, "sky.underwear"],
         ["sky.  un, red", 8, "sky.  underwear, red"],
         ["sky.unev, red", 6, "sky.underwear, red"],
@@ -175,8 +175,17 @@ async function periodTests() {
         ["sky.un", 6, "sky.underwear, ", true],
         ["sky. un, red", 7, "sky. underwear, red", true],
         ["sky.un.end", 6, "sky.underwear.end", true],
+        ["sky.un!", 6, "sky.underwear!"],
+        ['"sky.un"', 7, '"sky.underwear"'],
+        ["sky. un?", 7, "sky. underwear?"],
+        ["sky.un。", 6, "sky.underwear。"],
+        ["sky.unev!?", 6, "sky.underwear!?", true],
+        ["「sky.un」", 7, "「sky.underwear」", true],
+        ["(sky.un:1.2)", 7, "(sky.underwear:1.2)", true],
+        ["sky.under!wear?", 6, "sky.under!wear?", false, "under!wear"],
+        ["sky.underwear!", 6, "sky.underwear!", false, "underwear!"],
     ]) {
-        const {area, context, queries} = await run(input, true, caret);
+        const {area, context, queries} = await run(input, true, caret, candidate);
         assert.deepEqual(queries, ["un"], input);
         Object.assign(context, {
             QUEUE_SANITIZE: [], QUEUE_AFTER_INSERT: [], processQueueReturn: async () => [],
@@ -185,9 +194,9 @@ async function periodTests() {
         context.TAC_CFG.appendSpace = appendSeparators;
         context.TAC_CFG.appendComma = appendSeparators;
         vm.runInNewContext(func(source, "insertTextAtCursor"), context);
-        await context.insertTextAtCursor(area, {type: context.ResultType.tag, text: "underwear"}, "un");
-        assert.equal(area.value, expected);
-        assert.equal(area.selectionStart, expected.endsWith(", ") ? expected.length : expected.indexOf("underwear") + "underwear".length);
+        await context.insertTextAtCursor(area, {type: context.ResultType.tag, text: candidate}, "un");
+        assert.equal(area.value, expected, input);
+        assert.equal(area.selectionStart, expected.endsWith(", ") ? expected.length : expected.indexOf(candidate) + candidate.length);
         assert.equal(area.selectionEnd, area.selectionStart);
     }
 }

@@ -811,6 +811,14 @@ async function insertTextAtCursor(textArea, result, tagword, tabCompletedWithout
     if (replacementRange) {
         editStart = replacementRange.start;
         editEnd = replacementRange.end;
+        if (afterPeriod) {
+            const suffix = prompt.slice(cursorPos, editEnd);
+            const punctuation = suffix.match(/[\p{Terminal_Punctuation}\p{Quotation_Mark}…]+$/u);
+            // Keep punctuation outside the edited word unless it is part of the selected tag.
+            if (punctuation && !text.toLowerCase().startsWith(prompt.slice(editStart, editEnd).toLowerCase())) {
+                editEnd = cursorPos + punctuation.index;
+            }
+        }
         matchText = prompt.substring(editStart, editEnd);
     }
     let surrounding = prompt.substring(editStart, editEnd);
@@ -856,7 +864,7 @@ async function insertTextAtCursor(textArea, result, tagword, tabCompletedWithout
 
     if (afterPeriod && optionalSeparator) {
         const remaining = prompt.slice(editEnd);
-        if (/^[ \t]*[.,:)\]\r\n]/.test(remaining)) optionalSeparator = "";
+        if (editEnd < periodRange.end || /^[ \t]*[.,:)\]\r\n]/.test(remaining)) optionalSeparator = "";
         else if (/^[ \t]/.test(remaining)) optionalSeparator = optionalSeparator.trimEnd();
     }
 
