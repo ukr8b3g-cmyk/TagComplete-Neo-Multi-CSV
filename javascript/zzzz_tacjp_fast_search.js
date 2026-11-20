@@ -526,7 +526,11 @@
                         if (result.translation) translations.set(text, result.translation);
                         output.push(result);
                     }
+                    const serverCount = output.length;
                     appendLocalExtraResults(output, body);
+                    if (body.candidate_sort_mode === "Prefix" && output.length === serverCount) {
+                        Object.defineProperty(output, "_tacjpRanked", {value: true});
+                    }
                     Object.defineProperty(output, "_tacjpHitCount", {
                         value: Number.isSafeInteger(data.matched_count) && data.matched_count >= data.results.length
                             ? data.matched_count + output.length - data.results.length : null,

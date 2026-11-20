@@ -163,6 +163,7 @@ const TACJP_CORE_LABELS = {
     tacjp_candidateSortMode: ["Candidate sort mode", "候補の並び順"],
     tac_animaArtistPrefix: ["Add '@' to artist tags", "アーティストタグに「@」を付ける"],
     tac_active: ["Enable Tag Autocompletion", "タグ自動補完を有効化"],
+    tac_completeAfterPeriod: ["Autocomplete after a period", "ピリオドの直後でも補完する"],
     "tac_activeIn.txt2img": ["Active in txt2img", "txt2imgで有効"],
     "tac_activeIn.img2img": ["Active in img2img", "img2imgで有効"],
     "tac_activeIn.negativePrompts": ["Active in negative prompts", "ネガティブプロンプトで有効"],
@@ -231,6 +232,7 @@ const TACJP_SELECT_LABELS = {
     tacjp_candidateSortMode: {
         normalize: tacJpCandidateSortMode,
         values: {
+            Prefix: ["Tag name prefix first", "タグ名の先頭一致を優先"],
             Legacy: ["TagComplete Neo compatible (CSV order)", "Neo互換（CSV順）"],
             Relevance: ["Relevance first", "関連度優先"],
             Count: ["Count first", "投稿数優先"],
@@ -412,6 +414,7 @@ async function tacJpSyncSettingsUi(settings) {
         await tacJpChooseGradioOption("tacjp_promptMode", promptLabels[settings.prompt_mode] || settings.prompt_mode);
     }
     const candidateSortLabels = {
+        Prefix: "Tag name prefix first",
         Legacy: "TagComplete Neo compatible (CSV order)",
         Relevance: "Relevance first",
         Count: "Count first",
@@ -423,7 +426,7 @@ async function tacJpSyncSettingsUi(settings) {
     ) {
         await tacJpChooseGradioOption(
             "tacjp_candidateSortMode",
-            candidateSortLabels[settings.candidate_sort_mode] || candidateSortLabels.Count,
+            candidateSortLabels[settings.candidate_sort_mode] || candidateSortLabels.Prefix,
         );
     }
     const prefixInput = gradioApp().querySelector("#setting_tac_animaArtistPrefix input");
@@ -474,6 +477,8 @@ function tacJpPromptMode(value) {
 
 function tacJpCandidateSortMode(value) {
     const modes = {
+        "Tag name prefix first": "Prefix",
+        "タグ名の先頭一致を優先": "Prefix",
         "TagComplete Neo compatible (CSV order)": "Legacy",
         "Neo互換（CSV順）": "Legacy",
         "Relevance first": "Relevance",
@@ -481,7 +486,7 @@ function tacJpCandidateSortMode(value) {
         "Count first": "Count",
         "投稿数優先": "Count",
     };
-    return modes[value] || value || "Count";
+    return modes[value] || value || "Prefix";
 }
 
 function tacJpArtistPrefix(value) {
@@ -539,7 +544,7 @@ function tacJpCurrentSettings() {
         tag_files: tacJpLiveTokens("tacjp_tagFiles", cfg.tagFiles || opts["tacjp_tagFiles"] || []),
         translation_files: tacJpLiveTokens("tacjp_translationFiles", cfg.translation?.translationFiles || opts["tacjp_translationFiles"] || []),
         prompt_mode: tacJpPromptMode(tacJpLiveValue("tacjp_promptMode", cfg.promptMode || opts["tacjp_promptMode"] || "Tag")),
-        candidate_sort_mode: tacJpCandidateSortMode(tacJpLiveValue("tacjp_candidateSortMode", cfg.candidateSortMode || opts["tacjp_candidateSortMode"] || "Count")),
+        candidate_sort_mode: tacJpCandidateSortMode(tacJpLiveValue("tacjp_candidateSortMode", cfg.candidateSortMode || opts["tacjp_candidateSortMode"] || "Prefix")),
         search_translations: tacJpLiveChecked("tac_translation.searchByTranslation", cfg.translation?.searchByTranslation ?? opts["tac_translation.searchByTranslation"] ?? true),
         show_translations: tacJpLiveChecked("tacjp_showTranslations", cfg.showTranslations ?? opts["tacjp_showTranslations"] ?? true),
         show_source_labels: tacJpLiveChecked("tacjp_showSourceLabels", cfg.showSourceLabels ?? opts["tacjp_showSourceLabels"] ?? false),

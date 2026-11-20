@@ -5,6 +5,7 @@ import os
 import pickle
 import time
 from array import array
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -240,6 +241,34 @@ def test_candidate_sort_modes_keep_csv_order_or_rank_relevance_or_count(
     assert [row[0] for row in legacy["results"]] == ["tag_z", "tag_a", "tag_b"]
     assert [row[0] for row in relevance["results"]] == ["tag_a", "tag_b", "tag_z"]
     assert [row[0] for row in count["results"]] == ["tag_a", "tag_b", "tag_z"]
+
+
+@pytest.mark.parametrize("query", ["UN", "une", "unev"])
+def test_default_ranks_canonical_names_before_aliases_and_infixes(tmp_path, query):
+    data = DataStore(tmp_path / "tags")
+    key = query.lower()
+    write(data.tag_dir / "tags.csv",
+          "tag,category,count,aliases\n"
+          f"x{key}middle,0,9999,\n"
+          f"alias_target,0,9000,{key}\n"
+          f"translation_target,0,8000,\n"
+          f"{key}ven_a,0,2,\n"
+          f"{key}猫,0,4,\n"
+          f"{key},0,1,\n")
+    write(data.translation_dir / "ja.csv", f"tag,ja\ntranslation_target,{key}\n")
+    store = FastSearchStore(data)
+    req = SearchRequest(query=query, tag_files=["tags.csv"], translation_files=["ja.csv"])
+    expected = [key, key + "猫", key + "ven_a", "alias_target", "translation_target", "x" + key + "middle"]
+    for limit in (1, 2, 10):
+        result = store.search(replace(req, limit=limit))
+        assert [r[0] for r in result["results"]] == expected[:limit]
+        assert result["matched_count"] == 6
+    disabled = store.search(replace(req, search_aliases=False, search_translations=False))
+    assert disabled["matched_count"] == 4
+    assert [r[0] for r in disabled["results"]] == expected[:3] + expected[-1:]
+    substring = store.search(replace(req, substring_only=True))
+    assert substring["results"][0][0] == "x" + key + "middle"
+    assert substring["matched_count"] == 6
 
 
 def test_count_sort_keeps_zero_before_missing_counts_and_ignores_natural_language(

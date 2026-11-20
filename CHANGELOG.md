@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.2
+
+- Default to exact tag names and tag name prefixes before other matches. Keep saved candidate sort modes and exact hit counts.
+- Add a default-on setting for completion immediately after a period. Preserve surrounding punctuation when inserting a suggestion.
+- Hide stale candidates on input and avoid duplicate normal-tag searches alongside embedding completion.
+
+## 1.2.1
+
+- Update the bundled tag and translation dictionaries and document input safety and search improvements.
+
 ## 1.2.0
 
 - Added optional **Danbooru Tag Cleaning Assist** for Forge / Forge Neo; default is OFF.

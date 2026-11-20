@@ -8,12 +8,12 @@ const source = fs.readFileSync(path.join(root, "javascript/tagAutocomplete.js"),
 const core = require(path.join(root, "javascript/tacjp_core.js"));
 const types = {tag: 1, extra: 2, embedding: 3, lora: 4, wildcardTag: 5, umiWildcard: 6};
 const candidate = (i, type = types.tag) => ({text: `blue_${i}`, type, count: 100, matchScore: 0});
-async function search({parser = [], legacy = [], config = {}} = {}) {
+async function search({parser = [], legacy = [], config = {}, query = "blue", index = new Map()} = {}) {
     const state = {}, context = {TACJPCore: core, TAC_CFG: {
         candidateSortMode: "Legacy", useIndexedSearch: false, promptMode: "Tag",
         includeEmbeddingsInNormalResults: false, frequencySort: false, showAllResults: false, maxResults: 20,
         alias: {searchByAlias: true}, translation: {searchByTranslation: true}, extra: {extraFile: "None"}, ...config},
-        tagsLoaded: true, allTags: legacy, translations: new Map(), tagIndex: new Map(), extras: [],
+        tagsLoaded: true, allTags: legacy, translations: new Map(), tagIndex: index, extras: [],
         ResultType: types, AutocompleteResult: class {constructor(text, type) {this.text = text;this.type = type;}},
         isEnabled: () => true, isAutocompleteGenerationCurrent: () => true,
         processParsers: async () => parser.length ? [parser] : [], getSortFunction: () => () => 0,
@@ -25,13 +25,35 @@ async function search({parser = [], legacy = [], config = {}} = {}) {
     };
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf("async function autocomplete("), source.indexOf("const tagWeightWheelLast =")), context);
-    await context.autocomplete({selectionStart: 4}, "blue", "blue", 1);
+    await context.autocomplete({selectionStart: query.length}, query, query, 1);
     state.beforeNormal = context.resultCountBeforeNormalTags;
     return state;
 }
 (async () => {
+    const names = [
+        ["brown_hair", 0, 9000, "brunette"], ["uneven_eyes", 0, 40, ""],
+        ["expressionless", 0, 8000, "unexpressive"], ["une", 0, 1, ""],
+        ["uneven_legwear", 0, 90, ""], ["hatsune_miku", 0, 4000, ""],
+    ];
+    const prefix = {candidateSortMode: "Prefix", useIndexedSearch: true};
+    const index = new Map([["une", [names[1]]]]);
+    const run = async query => (await search({query, legacy: names, config: prefix, index})).results.map(r => r.text);
+    assert.deepEqual(await run("UNE"), ["une", "uneven_legwear", "uneven_eyes", "expressionless", "brown_hair", "hatsune_miku"]);
+    assert.deepEqual(await run("unev"), ["uneven_legwear", "uneven_eyes"]);
+    assert.equal((await run("*une"))[0], "brown_hair");
     const tags = Array.from({length: 250}, (_, i) => candidate(i));
     Object.defineProperty(tags, "_tacjpHitCount", {value: 3000});
+    const combined = await search({
+        parser: tags, legacy: [["blue_duplicate", 0, 1, ""]],
+        config: {candidateSortMode: "Prefix", includeEmbeddingsInNormalResults: true, showAllResults: true},
+    });
+    assert.equal(combined.results.length, tags.length, "a server tag batch runs only once with embeddings enabled");
+    const mixed = await search({
+        parser: [candidate(0, types.embedding), candidate(0), candidate(249)],
+        config: {candidateSortMode: "Prefix", frequencySort: true},
+    });
+    assert.deepEqual(mixed.results.map(r => r.type), [types.embedding, types.tag, types.tag]);
+    assert.equal(mixed.results[1].text, "blue_249");
     const shown = await search({parser: tags});assert.equal(shown.results.length, 20);
     assert.equal(shown.summary.total, 3000);assert.equal(shown.summary.exact, true);
     assert.equal((await search({parser: tags, config: {showAllResults: true}})).results.length, 250);

@@ -5,6 +5,7 @@ from __future__ import annotations
 import heapq
 import re
 import time
+from array import array
 from collections import OrderedDict
 from typing import Any, Sequence
 
@@ -107,6 +108,8 @@ class FastSearchQueryMixin:
             return 0
         if value.startswith(query):
             return 10
+        if query not in value:
+            return 99
         words = [
             part
             for part in re.split(r"[^\w]+", value, flags=re.UNICODE)
@@ -114,7 +117,7 @@ class FastSearchQueryMixin:
         ]
         if any(word.startswith(query) for word in words):
             return 20
-        return 30 if query in value else 99
+        return 30
 
     @staticmethod
     def _source_penalty(
@@ -243,6 +246,29 @@ class FastSearchQueryMixin:
             return tuple(intersection), False
         return (), False
 
+    def _short_prefix_hits(self, index, query, search_aliases, search_translations):
+        # Short word-prefix postings omit infixes and some mixed-script names.
+        # One pass over the normalized blobs also supplies the exact hit count.
+        key = (query, search_aliases, search_translations)
+        with self._lock:
+            cache = index.setdefault("_short_prefix_hits", OrderedDict())
+            if key in cache:
+                cache.move_to_end(key)
+                return cache[key]
+        prefixes, others = array("I"), array("I")
+        for row_id, (tag, aliases, translations) in enumerate(index["search_blobs"]):
+            if query in tag:
+                bucket = prefixes if tag.startswith(query) else others
+                bucket.append(row_id)
+            elif (search_aliases and query in aliases) or (search_translations and query in translations):
+                others.append(row_id)
+        with self._lock:
+            cache[key] = prefixes, others
+            cache.move_to_end(key)
+            if len(cache) > 4:
+                cache.popitem(last=False)
+        return prefixes, others
+
     def _matched_count(
         self,
         index: dict[str, Any],
@@ -251,6 +277,7 @@ class FastSearchQueryMixin:
         search_translations: bool,
         candidate_ids: Sequence[int] | None,
         fallback_count: int,
+        known_count: int | None = None,
     ) -> int:
         blobs = index["search_blobs"]
         field_groups = index.get("field_groups")
@@ -269,7 +296,9 @@ class FastSearchQueryMixin:
                 counts.move_to_end(key)
                 return cached
 
-        if grouped_blobs:
+        if known_count is not None:
+            count = known_count
+        elif grouped_blobs:
             groups = blobs if candidate_ids is None else (blobs[row_id] for row_id in candidate_ids)
             count = sum(
                 query in tag_blob
@@ -338,21 +367,30 @@ class FastSearchQueryMixin:
         fields = index.get("fields")
         field_groups = index.get("field_groups")
         blobs = index["search_blobs"]
-        candidate_ids, candidate_set_is_complete = self._candidate_ids(
-            index,
-            query,
-            request.substring_only,
-        )
-
         candidate_sort_mode = (
             request.candidate_sort_mode
             if request.candidate_sort_mode in {
+                "Prefix",
                 "Legacy",
                 "Relevance",
                 "Count",
             }
-            else "Count"
+            else "Prefix"
         )
+        prefix_mode = candidate_sort_mode == "Prefix"
+        other_short_hits = None
+        known_count = None
+        if (
+            prefix_mode and len(query) < 3 and query.isascii() and "\x1f" not in query
+            and field_groups is not None and blobs and isinstance(blobs[0], tuple)
+        ):
+            candidate_ids, other_short_hits = self._short_prefix_hits(
+                index, query, request.search_aliases, request.search_translations,
+            )
+            candidate_set_is_complete = True
+            known_count = len(candidate_ids) + len(other_short_hits)
+        else:
+            candidate_ids, candidate_set_is_complete = self._candidate_ids(index, query, request.substring_only)
         scored: list[tuple[tuple[Any, ...], int, int, int]] = []
         seen_ids: set[int] = set()
 
@@ -360,37 +398,27 @@ class FastSearchQueryMixin:
             if row_id in seen_ids:
                 return False
             seen_ids.add(row_id)
-            if field_groups is not None:
-                (
-                    tag_field,
-                    alias_fields,
-                    translation_fields,
-                ) = field_groups[row_id]
-                selected_fields = [tag_field]
-                if request.search_aliases:
-                    selected_fields.extend(alias_fields)
-                if request.search_translations:
-                    selected_fields.extend(translation_fields)
-                field_values = selected_fields
+            tag_field = field_groups[row_id][0] if field_groups is not None else normalize_search(rows[row_id][0])
+            if prefix_mode and not request.substring_only and tag_field.startswith(query):
+                best = 0 if tag_field == query else 1
             else:
-                field_values = (
-                    fields[row_id]
-                    if fields is not None
-                    else (normalize_search(rows[row_id][0]),)
-                )
-            best = min(
-                (
-                    self._field_score(
-                        value,
-                        query,
-                        request.substring_only,
+                if field_groups is not None:
+                    _, alias_fields, translation_fields = field_groups[row_id]
+                    field_values = (
+                        tag_field,
+                        *(alias_fields if request.search_aliases else ()),
+                        *(translation_fields if request.search_translations else ()),
                     )
-                    for value in field_values
-                ),
-                default=99,
-            )
-            if best >= 99:
-                return False
+                else:
+                    field_values = fields[row_id] if fields is not None else (tag_field,)
+                best = min(
+                    (self._field_score(value, query, request.substring_only) for value in field_values),
+                    default=99,
+                )
+                if best >= 99:
+                    return False
+                if prefix_mode and not request.substring_only:
+                    best = 2 + best // 10
             row = rows[row_id]
             source_penalty = self._source_penalty(
                 request.prompt_mode,
@@ -504,6 +532,14 @@ class FastSearchQueryMixin:
         else:
             for row_id in candidate_ids:
                 consider(int(row_id))
+            if other_short_hits is not None:
+                # Once enough preferred-source canonical hits fill the pool,
+                # none of the remaining alias/translation/infix hits can displace them.
+                if request.substring_only or sum(item[1] <= 1 for item in scored) < limit:
+                    for row_id in other_short_hits:
+                        consider(row_id)
+            elif prefix_mode and candidate_set_is_complete:
+                known_count = len(scored)
 
         # Prefix indexing is deliberately compact. If it produced fewer than
         # the requested pool, complete substring coverage with a fast C-level
@@ -513,7 +549,7 @@ class FastSearchQueryMixin:
             not candidate_set_is_complete
             and not count_short_complete
             and (
-                candidate_sort_mode in {"Count", "Legacy"}
+                candidate_sort_mode in {"Count", "Legacy", "Prefix"}
                 or len(scored) < limit
             )
             and len(seen_ids) < len(rows)
@@ -592,7 +628,7 @@ class FastSearchQueryMixin:
         matched_count = self._matched_count(
             index, query, request.search_aliases, request.search_translations,
             candidate_ids if candidate_set_is_complete and "\x1f" not in query else None,
-            len(scored),
+            len(scored), known_count,
         )
         count_ms = round((time.perf_counter() - count_started) * 1000, 2)
         return {

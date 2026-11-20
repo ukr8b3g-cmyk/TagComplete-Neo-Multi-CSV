@@ -14,7 +14,7 @@ New tag selections default to tags_merged_dedup.csv only. Choose additional dict
 
 # TagComplete Neo Multi-CSV
 
-**最新リリース: v1.2.1**
+**最新リリース: v1.2.2**
 
 **[English](#english)**
 
@@ -45,8 +45,9 @@ controls are intentionally hidden in the current release.
 
 ### リリースと旧バージョン
 
-- **最新版:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
-- **v1.2.1 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.1.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.1.zip)
+- **最新版:** [v1.2.2](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.2)
+- **v1.2.2 ZIPを直接ダウンロード:** [TagComplete-Neo-Multi-CSV v1.2.2.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.2.zip)
+- **旧版v1.2.1:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
 - **旧版v1.2.0:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
 - **旧バージョン:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
@@ -54,6 +55,14 @@ controls are intentionally hidden in the current release.
 v1.2.1には以下の①〜⑦と新版辞書を含みます。旧v1.2.0 ZIPは固定されており、これらを含みません。
 
 ### What's New
+
+#### v1.2.2 — 2026-11-20 · 先頭一致とピリオド直後の補完
+
+- **候補の並び順**の初期値を**タグ名の先頭一致を優先**にしました。正式タグの完全一致と先頭一致が先に出ます。別名・翻訳・途中一致の候補も引き続き検索できます。既に並び順を保存している場合は、**設定 → Tag Autocomplete / Multi-CSV → 候補の並び順**から選んでください。
+- **ピリオドの直後でも補完する**を追加しました。初期値はオンです。半角ピリオドに続けて入力した「sky.un」や「sky. un」は「un」で検索し、候補を確定してもピリオドと空白が残ります。切り替えは同じ設定画面の**タグ自動補完を有効化**のすぐ下です。
+- 入力が変わったら古い候補を閉じます。Embeddingを同時に検索する場合も、サーバーで処理済みの通常タグを重ねて検索しません。
+
+更新後の次回起動で設定が表示されます。設定変更後は **Apply settings（設定を適用）** を押してください。
 
 #### v1.2.1 — 2026-11-03：タグ・翻訳CSV更新
 
@@ -426,10 +435,14 @@ Python側に保持して現在の検索に必要な候補だけを返します�
 
 ### 候補の並び順
 
-新規インストール時の`Candidate sort mode`は`投稿数優先`です。通常タグでは、
+「候補の並び順」の初期値は「タグ名の先頭一致を優先」です。同じ辞書種別では、`une` と入力すると正式タグ `une`、`uneven_…`、別名・翻訳・途中一致の順に表示します。`*une` は途中一致を指定します。設定済みの環境では「候補の並び順」から切り替えられます。
+
+「投稿数優先」を選んだ場合、通常タグでは、
 ソース優先順位の後に投稿数を降順で並べ、同じ投稿数では一致度、CSV順で決定します。
 `count=0`は有効な投稿数として表示・並び替えの対象になります。自然言語・Custom候補は
 投稿数順の対象外で、一致度順です。
+
+「タグ自動補完を有効化」の下にある「ピリオドの直後でも補完する」は初期値オンです。`sky.un` と `sky. un` はどちらも `un` の候補を表示し、確定時はピリオドと空白を残します。オフにすると、ピリオドに続く最初の単語では候補を表示しません。
 
 ### プロンプトモード
 
@@ -692,8 +705,9 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 
 ### Releases and previous versions
 
-- **Latest:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
-- **Direct v1.2.1 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.1.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.1.zip)
+- **Latest:** [v1.2.2](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.2)
+- **Direct v1.2.2 ZIP download:** [TagComplete-Neo-Multi-CSV v1.2.2.zip](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/archive/refs/tags/v1.2.2.zip)
+- **Previous v1.2.1:** [v1.2.1](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.1)
 - **Previous v1.2.0:** [v1.2.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.2.0)
 - **Previous:** [v1.1.0](https://github.com/ukr8b3g-cmyk/TagComplete-Neo-Multi-CSV/releases/tag/v1.1.0)
 
@@ -701,6 +715,14 @@ CSV選択、候補表示、LoRA・Embedding・Wildcard補完、設定保存を�
 The v1.2.1 archive includes fixes 1–7 and the updated dictionaries. The old v1.2.0 archive remains fixed and does not include them.
 
 ### What's New
+
+#### v1.2.2 — 2026-11-20 · Tag name prefixes and completion after a period
+
+- **Tag name prefix first** is the new default candidate order. Exact tag names and names that start with your input come first. Alias, translation, and substring matches remain searchable. If you already saved a sort mode, use **Settings → Tag Autocomplete / Multi-CSV → Candidate sort mode** to select the new mode.
+- **Autocomplete after a period** is on by default. Both “sky.un” and “sky. un” search for “un”. Accepting a suggestion preserves the period and any spaces. The checkbox is immediately below **Enable Tag Autocompletion**.
+- The old list closes as soon as the input changes. When embeddings are also searched, the browser skips normal tags already handled by the server.
+
+The new settings appear the next time Forge starts after the update. Select **Apply settings** after making changes.
 
 #### v1.2.1 — 2026-11-03: Updated tag and translation CSVs
 
@@ -985,11 +1007,15 @@ See [PERFORMANCE.md](PERFORMANCE.md) for architecture and measured reference res
 
 ### Candidate ordering
 
-New installations use `Count first` as the candidate sort mode. For normal tag
+The default is **Tag name prefix first**. Within the same source priority, typing `une` shows the tag `une`, then names starting with `une` such as `uneven_legwear`, followed by alias, translation and other matches. Use `*une` for a substring search. Existing installations can select the new mode under **Candidate sort mode**.
+
+With **Count first**, for normal tag
 candidates, source priority is followed by descending post count, then match
 quality and CSV order. `count=0` is a valid post count and is displayed.
 Natural-language and custom candidates remain ranked by match quality rather
 than post count.
+
+**Autocomplete after a period** is on by default under **Enable Tag Autocompletion**. Both `sky.un` and `sky. un` show suggestions for `un`. Accepting a suggestion preserves the period and any spaces. Turn it off to skip suggestions for the first word after a period.
 
 ### Prompt modes
 

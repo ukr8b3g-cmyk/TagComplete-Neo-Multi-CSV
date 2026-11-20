@@ -41,7 +41,7 @@ class FastSearchBody(BaseModel):
     tag_files: list[str] = Field(default_factory=list, max_items=64)
     translation_files: list[str] = Field(default_factory=list, max_items=64)
     prompt_mode: str = "Tag"
-    candidate_sort_mode: str = "Count"
+    candidate_sort_mode: str = "Prefix"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True

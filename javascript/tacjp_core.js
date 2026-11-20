@@ -86,15 +86,17 @@
     }
 
     function matchScore(value, query, substringOnly = false) {
-        const candidate = normalizeSearch(value);
-        const needle = normalizeSearch(query, true);
-        if (!candidate || !needle) return 99;
-        if (substringOnly) return candidate.includes(needle) ? 30 : 99;
+        return normalizedMatchScore(normalizeSearch(value), normalizeSearch(query, true), substringOnly);
+    }
+
+    function normalizedMatchScore(candidate, needle, substringOnly = false) {
+        if (!needle || !candidate.includes(needle)) return 99;
+        if (substringOnly) return 30;
         if (candidate === needle) return 0;
         if (candidate.startsWith(needle)) return 10;
         const words = candidate.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
         if (words.some(word => word.startsWith(needle))) return 20;
-        return candidate.includes(needle) ? 30 : 99;
+        return 30;
     }
 
     function sourcePenalty(promptMode, sourceType, contextLooksNatural) {
@@ -132,7 +134,7 @@
      * choosing `soft natural lighting` replace the whole partial phrase rather
      * than producing `soft soft natural lighting`.
      */
-    function phraseReplacementRange(prompt, cursor, selectedText) {
+    function phraseReplacementRange(prompt, cursor, selectedText, completeAfterPeriod = false) {
         const text = String(prompt || "");
         const end = Math.max(0, Math.min(Number(cursor) || 0, text.length));
         const selected = normalizeSearch(selectedText);
@@ -149,6 +151,12 @@
             const candidate = normalizeSearch(segment.slice(startInSegment));
             if (candidate.includes(" ") && selected.startsWith(candidate)) {
                 return {start: boundary + startInSegment, end};
+            }
+            const word = words[index][0];
+            const dot = completeAfterPeriod ? word.lastIndexOf(".") : -1;
+            if (dot >= 0 && dot < word.length - 1 && !/[<>$/\\]/.test(word) && !/^\d/.test(word.slice(dot + 1))) {
+                const start = startInSegment + dot + 1;
+                if (selected.startsWith(normalizeSearch(segment.slice(start)))) return {start: boundary + start, end};
             }
         }
         return null;
@@ -276,6 +284,7 @@
         isUnderscoreProtected,
         normalizeSearch,
         matchScore,
+        normalizedMatchScore,
         sourcePenalty,
         separatorForInsertMode,
         phraseReplacementRange,

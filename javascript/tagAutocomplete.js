@@ -368,7 +368,7 @@ async function syncOptions() {
         tagFile: tagFiles[0] || "None", // compatibility for original extension code
         promptMode: opts["tacjp_promptMode"] || "Tag",
         searchEngine: opts["tacjp_searchEngine"] || "Server index",
-        candidateSortMode: opts["tacjp_candidateSortMode"] || "Count",
+        candidateSortMode: opts["tacjp_candidateSortMode"] || "Prefix",
         uiLanguage: opts["tacjp_uiLanguage"] || "Auto",
         showTranslations: opts["tacjp_showTranslations"] !== false,
         showSourceLabels: !!opts["tacjp_showSourceLabels"],
@@ -387,6 +387,7 @@ async function syncOptions() {
             modelList: opts["tac_activeIn.modelList"],
             modelListMode: opts["tac_activeIn.modelListMode"]
         },
+        completeAfterPeriod: opts["tac_completeAfterPeriod"] !== false,
         slidingPopup: opts["tac_slidingPopup"],
         maxResults: opts["tac_maxResults"],
         showAllResults: opts["tac_showAllResults"],
@@ -630,6 +631,29 @@ function getTagRegex() {
     return cachedTagRegex;
 }
 
+// Sentence-ending ASCII periods can touch the next word or precede spaces.
+function periodCompletionRange(prompt, cursor, tokens = null) {
+    if (!Number.isInteger(cursor) || cursor <= 0) return null;
+    const dot = prompt.lastIndexOf(".", cursor - 1);
+    if (dot < 0) return null;
+    const tail = prompt.slice(dot + 1, cursor);
+    if (!/^[ \t]*[^\s.,|<>():\[\]]*$/u.test(tail)) return null;
+    if (/[\d:]/.test(prompt.charAt(dot - 1)) && /\d/.test(prompt.charAt(dot + 1))) return null;
+
+    const start = cursor - tail.trimStart().length;
+    for (const match of tokens ?? prompt.matchAll(getTagRegex())) {
+        if (match.index >= cursor) break;
+        const token = match[0];
+        const end = match.index + token.length;
+        if (end < cursor) continue;
+        // Leave dots in model names, wildcards, styles and paths to their parsers.
+        if (/^[<#$*]|[/\\]/.test(token) || token.startsWith(TAC_CFG.wcWrap || "__")) return null;
+        const nextDot = token.indexOf(".", cursor - match.index);
+        return {start, end: nextDot < 0 ? end : match.index + nextDot};
+    }
+    return {start, end: cursor};
+}
+
 function isSingleCharacterPunctuationQuery(value) {
     const query = String(value ?? "").trim();
     return query.length === 1 && !/[\p{L}\p{N}]/u.test(query);
@@ -778,12 +802,15 @@ async function insertTextAtCursor(textArea, result, tagword, tabCompletedWithout
     let editStart = Math.max(cursorPos - tagword.length, 0);
     let editEnd = Math.min(cursorPos + tagword.length, prompt.length);
     let matchText = tagword;
-    const phraseRange = (result.insertMode === "phrase" && globalThis.TACJPCore?.phraseReplacementRange)
-        ? globalThis.TACJPCore.phraseReplacementRange(prompt, cursorPos, text)
-        : null;
-    if (phraseRange) {
-        editStart = phraseRange.start;
-        editEnd = phraseRange.end;
+    const periodRange = TAC_CFG.completeAfterPeriod !== false ? periodCompletionRange(prompt, cursorPos) : null;
+    const afterPeriod = periodRange && prompt.slice(periodRange.start, cursorPos).toLowerCase() === tagword.toLowerCase();
+    let replacementRange = afterPeriod ? periodRange : null;
+    if (!replacementRange && result.insertMode === "phrase" && globalThis.TACJPCore?.phraseReplacementRange) {
+        replacementRange = globalThis.TACJPCore.phraseReplacementRange(prompt, cursorPos, text, TAC_CFG.completeAfterPeriod !== false);
+    }
+    if (replacementRange) {
+        editStart = replacementRange.start;
+        editEnd = replacementRange.end;
         matchText = prompt.substring(editStart, editEnd);
     }
     let surrounding = prompt.substring(editStart, editEnd);
@@ -825,6 +852,12 @@ async function insertTextAtCursor(textArea, result, tagword, tabCompletedWithout
     } else if (extraNetworkTypes.includes(tagType)) {
         // Use the dedicated separator for extra networks if it's defined, otherwise fall back to space
         optionalSeparator = TAC_CFG.extraNetworksSeparator || " ";
+    }
+
+    if (afterPeriod && optionalSeparator) {
+        const remaining = prompt.slice(editEnd);
+        if (/^[ \t]*[.,:)\]\r\n]/.test(remaining)) optionalSeparator = "";
+        else if (/^[ \t]/.test(remaining)) optionalSeparator = optionalSeparator.trimEnd();
     }
 
     // Escape $ signs since they are special chars for the replace function
@@ -968,6 +1001,7 @@ function updateHitCount(resultDiv, query, total, available, exact = true) {
 }
 
 function addResultsToList(textArea, results, tagword, resetList, timingSequence = null, hitSummary = null) {
+    const generation = autocompleteGenerations.get(textArea);
     let textAreaId = getTextAreaIdentifier(textArea);
     let resultDiv = gradioApp().querySelector('.autocompleteResults' + textAreaId);
     let resultsList = resultDiv.querySelector('ul');
@@ -1244,6 +1278,7 @@ function addResultsToList(textArea, results, tagword, resetList, timingSequence 
 
         // Add click listener
         li.addEventListener("click", (e) => {
+            if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
             if (e.ctrlKey || e.metaKey) {
                 resetUseCount(result.text, result.type, !isNegative, isNegative);
                 flexDiv.querySelector(".acMetaText")?.classList.remove("biased");
@@ -1534,6 +1569,16 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
     if (generation === null) generation = nextAutocompleteGeneration(textArea);
     if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
 
+    const cursor = textArea.selectionStart;
+    const dottedTokens = fixedTag === null && prompt.includes(".") ? [...prompt.matchAll(getTagRegex())] : null;
+    const periodRange = dottedTokens && periodCompletionRange(prompt, cursor, dottedTokens);
+    const skipAfterPeriod = periodRange && (TAC_CFG.completeAfterPeriod === false || periodRange.start === cursor);
+    if (!tagsLoaded && skipAfterPeriod) {
+        tagword = "";
+        hideResults(textArea);
+        return;
+    }
+
     // Lazy-load tags on first interaction so startup doesn't block the main thread.
     // If not loaded yet, show a brief loading indicator and retry automatically.
     if (!tagsLoaded) {
@@ -1570,7 +1615,8 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         let weightedTags = [...prompt.matchAll(WEIGHT_REGEX)]
             .map(match => match[1])
             .sort((a, b) => a.length - b.length);
-        let tags = [...(prompt.match(getTagRegex()) || [])].sort((a, b) => a.length - b.length);
+        let tags = (dottedTokens ? dottedTokens.map(match => match[0]) : prompt.match(getTagRegex()) || [])
+            .sort((a, b) => a.length - b.length);
         
         if (weightedTags !== null && tags !== null) {
             const weightedSet = new Set(weightedTags);
@@ -1591,12 +1637,15 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         previousTags = tags;
 
         // Guard for no difference / only whitespace remaining / last edited tag was fully removed
-        if (diff === null || diff.length === 0 || (diff.length === 1 && tagCountChange < 0)) {
-            if (!hideBlocked) hideResults(textArea);
-            return;
+        if (periodRange) {
+            tagword = skipAfterPeriod ? "" : prompt.slice(periodRange.start, cursor);
+        } else {
+            if (!diff || !diff.length || (diff.length === 1 && tagCountChange < 0)) {
+                if (!hideBlocked) hideResults(textArea);
+                return;
+            }
+            tagword = diff[0];
         }
-
-        tagword = diff[0]
 
         // Guard for empty tagword
         if (tagword === null || tagword.length === 0) {
@@ -1616,7 +1665,9 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
     let timingSequence = null;
 
     // Process all parsers
-    let resultCandidates = (await processParsers(textArea, prompt))?.filter(x => x.length > 0);
+    const parsed = await processParsers(textArea, prompt);
+    const resultCandidates = parsed?.filter(list => list.length > 0);
+    const serverHandledTags = parsed?.some(list => list._tacjpHitCount !== undefined);
     if (!isAutocompleteGenerationCurrent(textArea, generation)) return;
 
     const timedCandidate = resultCandidates?.find(
@@ -1629,9 +1680,10 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
     if (resultCandidates && resultCandidates.length > 0) {
         // Flatten our candidate(s)
         results = resultCandidates.flat();
-        // Sort results, but not if it's umi tags since they are sorted by count
-        if (!(resultCandidates.length === 1 && results[0].type === ResultType.umiWildcard))
-            results = results.sort(getSortFunction());
+        // A single ranked server batch or UMI list is already in display order.
+        const alreadyRanked = resultCandidates.length === 1 &&
+            (resultCandidates[0]._tacjpRanked || results[0].type === ResultType.umiWildcard);
+        if (!alreadyRanked) results.sort(getSortFunction());
     }
     // Single-character punctuation such as "/" or "\\" is too broad for the
     // normal tag list and can surface ASCII/emoticon tags after typing has ended.
@@ -1643,7 +1695,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
     }
 
     // Else search the normal tag list
-    if (!suppressNormalTagSearch && (
+    if (!serverHandledTags && !suppressNormalTagSearch && (
         !resultCandidates || resultCandidates.length === 0
         || (TAC_CFG.includeEmbeddingsInNormalResults && !(tagword.startsWith("<") || tagword.startsWith("*<")))
     )) {
@@ -1668,19 +1720,32 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
             const values = [row[0]];
             if (TAC_CFG.alias.searchByAlias && row[3]) values.push(...String(row[3]).split(","));
             if (TAC_CFG.translation.searchByTranslation && translations.has(row[0])) values.push(translations.get(row[0]));
-            return values.map(normaliseSearch).filter(Boolean);
+            return values.map(value => normaliseSearch(value)).filter(Boolean);
         };
-        const fieldScore = value => globalThis.TACJPCore?.matchScore
-            ? globalThis.TACJPCore.matchScore(value, tagword, substringOnly)
-            : (() => {
-                if (!queryNormalized) return 99;
-                if (substringOnly) return value.includes(queryNormalized) ? 30 : 99;
-                if (value === queryNormalized) return 0;
-                if (value.startsWith(queryNormalized)) return 10;
-                const words = value.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-                if (words.some(word => word.startsWith(queryNormalized))) return 20;
-                return value.includes(queryNormalized) ? 30 : 99;
-            })();
+        const fieldScore = value => {
+            if (globalThis.TACJPCore?.normalizedMatchScore) {
+                return globalThis.TACJPCore.normalizedMatchScore(value, queryNormalized, substringOnly);
+            }
+            if (!queryNormalized || !value.includes(queryNormalized)) return 99;
+            if (substringOnly) return 30;
+            if (value === queryNormalized) return 0;
+            if (value.startsWith(queryNormalized)) return 10;
+            return value.split(/[^\p{L}\p{N}]+/u).some(word => word.startsWith(queryNormalized)) ? 20 : 30;
+        };
+        const prefixMode = TAC_CFG.candidateSortMode === "Prefix";
+        const prefixScore = row => {
+            const name = row._lower ??= normaliseSearch(row[0]);
+            if (!substringOnly && name.startsWith(queryNormalized)) return name === queryNormalized ? 0 : 1;
+            let best = fieldScore(name);
+            const aliases = TAC_CFG.alias.searchByAlias && (row._aliasLower ??= normaliseSearch(row[3]));
+            const translationsText = TAC_CFG.translation.searchByTranslation &&
+                (row._translationLower ??= normaliseSearch(row._translation || translations.get(row[0])));
+            for (const text of [aliases, translationsText]) {
+                if (!text || !text.includes(queryNormalized)) continue;
+                for (const value of text.split(",")) best = Math.min(best, fieldScore(value.trim()));
+            }
+            return best === 99 || substringOnly ? best : 2 + best / 10;
+        };
         const contextLooksNatural = (() => {
             const cursor = textArea.selectionStart || prompt.length;
             const before = prompt.slice(0, cursor);
@@ -1700,16 +1765,13 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
                 }
                 return 0;
             })();
-        const scoreRow = row => {
-            const best = Math.min(...fieldsForTag(row).map(fieldScore));
-            return best >= 99 ? 99 : best + sourcePenalty(row);
-        };
-        const fil = row => scoreRow(row) < 99;
+        const scoreRow = row => prefixMode ? prefixScore(row) : Math.min(...fieldsForTag(row).map(fieldScore));
 
         // Use indexed subset for 3+ characters, fallback to full scan if needed.
         let tagsToSearch = allTags;
         if (
-            TAC_CFG.candidateSortMode !== "Count"
+            !prefixMode
+            && TAC_CFG.candidateSortMode !== "Count"
             && TAC_CFG.candidateSortMode !== "Legacy"
             && TAC_CFG.useIndexedSearch
             && queryNormalized.length >= 3
@@ -1741,14 +1803,17 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
             const parsed = Number(value);
             return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
         };
-        const scoreCandidates = candidates => candidates
-            .map((row, originalOrder) => ({
-                row,
-                sourcePenalty: sourcePenalty(row),
-                score: scoreRow(row),
-                originalOrder,
-            }))
-            .filter(item => item.score < 99);
+        const scoreCandidates = candidates => {
+            const matches = [];
+            for (let originalOrder = 0; originalOrder < candidates.length; originalOrder++) {
+                const row = candidates[originalOrder];
+                const best = scoreRow(row);
+                if (best >= 99) continue;
+                const penalty = sourcePenalty(row);
+                matches.push({row, originalOrder, sourcePenalty: penalty, score: best + penalty});
+            }
+            return matches;
+        };
         let scored = scoreCandidates(tagsToSearch);
         if (scored.length === 0 && tagsToSearch !== allTags) scored = scoreCandidates(allTags);
         scored.sort((a, b) => {
@@ -1800,7 +1865,7 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
         if (TAC_CFG.extra.extraFile) {
             let extraResults = [];
 
-            extras.filter(fil).forEach(e => {
+            extras.filter(row => scoreRow(row) < 99).forEach(e => {
                 let result = new AutocompleteResult(e[0].trim(), ResultType.extra)
                 result.category = e[1] || 0; // If no category is given, use 0 as the default
                 result.meta = e[2] || "Custom tag";
@@ -1900,14 +1965,21 @@ async function autocomplete(textArea, prompt, fixedTag = null, generation = null
                 ? normalTags[index++]
                 : result);
         } else {
-            results = results.sort((a, b) => {
-            if (TAC_CFG.candidateSortMode === "Legacy") {
+            const byUsage = (a, b) => {
+                if (TAC_CFG.candidateSortMode !== "Legacy") {
+                    const matchDifference = (a.matchScore || 0) - (b.matchScore || 0);
+                    if (matchDifference !== 0) return matchDifference;
+                }
                 return resultBiasMap.get(b) - resultBiasMap.get(a);
+            };
+            if (TAC_CFG.candidateSortMode === "Prefix") {
+                // Keep dedicated provider and extra-file slots in their requested positions.
+                const rankedTags = results.filter(r => r.type === ResultType.tag).sort(byUsage);
+                let i = 0;
+                results = results.map(r => r.type === ResultType.tag ? rankedTags[i++] : r);
+            } else {
+                results.sort(byUsage);
             }
-            const matchDifference = (a.matchScore || 0) - (b.matchScore || 0);
-            if (matchDifference !== 0) return matchDifference;
-            return resultBiasMap.get(b) - resultBiasMap.get(a);
-            });
         }
     }
 
@@ -2253,10 +2325,10 @@ function addAutocompleteToArea(area) {
             if (!e.inputType && !tacSelfTrigger) return;
             tacSelfTrigger = false;
             const generation = nextAutocompleteGeneration(area);
+            hideResults(area);
             if (e.isComposing || tagWeightComposingAreas.has(area)) {
                 debouncedAutocomplete.cancel();
                 debouncedUpdateRuby.cancel();
-                hideResults(area);
                 return;
             }
             globalThis.TACJPFastSearchTiming?.input();

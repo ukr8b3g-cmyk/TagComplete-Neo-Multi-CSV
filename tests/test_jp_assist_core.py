@@ -164,12 +164,12 @@ def test_anima_artist_prefix_preset_validation(tmp_path: Path) -> None:
     assert presets.validate_settings({"anima_artist_prefix": "invalid"})["anima_artist_prefix"] == "Off"
 
 
-def test_candidate_sort_mode_preset_validation_defaults_to_count(tmp_path: Path) -> None:
+def test_candidate_sort_mode_preset_validation_defaults_to_prefix(tmp_path: Path) -> None:
     presets = PresetStore(DataStore(tmp_path / "tags"))
-    assert presets.validate_settings({})["candidate_sort_mode"] == "Count"
+    assert presets.validate_settings({})["candidate_sort_mode"] == "Prefix"
     assert presets.validate_settings({"candidate_sort_mode": "Relevance"})["candidate_sort_mode"] == "Relevance"
     assert presets.validate_settings({"candidate_sort_mode": "Count"})["candidate_sort_mode"] == "Count"
-    assert presets.validate_settings({"candidate_sort_mode": "invalid"})["candidate_sort_mode"] == "Count"
+    assert presets.validate_settings({"candidate_sort_mode": "invalid"})["candidate_sort_mode"] == "Prefix"
 
 
 class FakeResponse:

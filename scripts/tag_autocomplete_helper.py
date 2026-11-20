@@ -806,8 +806,9 @@ def on_ui_settings():
             ]},
         ),
         "tacjp_candidateSortMode": shared.OptionInfo(
-            "Count", "Candidate sort mode", gr.Dropdown,
+            "Prefix", "Candidate sort mode", gr.Dropdown,
             lambda: {"choices": [
+                ("Tag name prefix first", "Prefix"),
                 ("TagComplete Neo compatible (CSV order)", "Legacy"),
                 ("Relevance first", "Relevance"),
                 ("Count first", "Count"),
@@ -837,6 +838,7 @@ def on_ui_settings():
 
         # Active in settings
         "tac_active": shared.OptionInfo(True, "Enable Tag Autocompletion"),
+        "tac_completeAfterPeriod": shared.OptionInfo(True, "Autocomplete after a period"),
         "tac_activeIn.txt2img": shared.OptionInfo(True, "Active in txt2img").needs_restart(),
         "tac_activeIn.img2img": shared.OptionInfo(True, "Active in img2img").needs_restart(),
         "tac_activeIn.negativePrompts": shared.OptionInfo(True, "Active in negative prompts").needs_restart(),

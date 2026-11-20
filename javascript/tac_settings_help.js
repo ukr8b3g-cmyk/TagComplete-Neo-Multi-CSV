@@ -27,8 +27,8 @@
             en: "Run explicitly with the adjacent update button. Downloads correction Parquet data from Hugging Face, installs DuckDB in its dedicated folder if needed, and builds SQLite. Deletes the temporary Parquet afterward. Separate from updating tag CSVs.",
         },
         tacjp_candidateSortMode: {
-            ja: "候補の並び順を選びます。Neo互換は選択したCSVと各CSV内の登録順を基本にし、関連度優先は一致度・件数・名前で並べます。投稿数優先は通常タグだけを投稿数順にします。プロンプトモードのタグ／自然言語優先とは別の設定です。",
-            en: "Chooses how tag candidates are ordered. Neo compatible preserves selected CSV order and each CSV's entry order; Relevance first uses match quality, count, and name. Count first orders normal tag entries by count only. This is separate from prompt mode's tag versus natural-language priority.",
+            ja: "標準では正式タグ名の完全一致、先頭一致、その他の一致の順に表示します。Neo互換は選択したCSVと各CSV内の登録順を基本にし、関連度優先は一致度・件数・名前で並べます。投稿数優先は通常タグだけを投稿数順にします。プロンプトモードのタグ／自然言語優先とは別の設定です。",
+            en: "By default an exact tag name comes first, followed by tag names starting with your input, then other matches. Neo compatible preserves selected CSV order and each CSV's entry order; Relevance first uses match quality, count, and name. Count first orders normal tag entries by count only. This is separate from prompt mode's tag versus natural-language priority.",
         },
         tacjp_showTranslations: {
             ja: "候補リストに翻訳を併記します。日本語で検索したい場合や、英語タグの意味を確認したい場合に有効です。",
@@ -41,6 +41,10 @@
         tacjp_colorNaturalLanguage: {
             ja: "自然言語プロンプト用の候補を色で識別します。通常のタグ候補と区別しやすくなります。",
             en: "Marks natural-language prompt candidates with a distinct color so they can be distinguished from regular tag candidates.",
+        },
+        tac_completeAfterPeriod: {
+            ja: "オンにすると、半角ピリオドの後で文字を入力したときに候補を表示します。「sky.un」「sky. un」はどちらも「un」で検索します。オフにすると、その単語の補完を休止します。",
+            en: "Show suggestions when you type a word after a period. Both “sky.un” and “sky. un” search for “un”. Turn off to skip completion for that word.",
         },
         tac_active: {
             ja: "タグ自動補完機能全体の有効・無効を切り替えます。",

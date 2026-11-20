@@ -722,9 +722,9 @@ class PresetStore:
         mode = _clean(settings.get("prompt_mode")) or "Tag"
         if mode not in VALID_PROMPT_MODES:
             mode = "Tag"
-        candidate_sort_mode = _clean(settings.get("candidate_sort_mode")) or "Count"
-        if candidate_sort_mode not in {"Legacy", "Relevance", "Count"}:
-            candidate_sort_mode = "Count"
+        candidate_sort_mode = _clean(settings.get("candidate_sort_mode")) or "Prefix"
+        if candidate_sort_mode not in {"Prefix", "Legacy", "Relevance", "Count"}:
+            candidate_sort_mode = "Prefix"
         anima_artist_prefix = _clean(settings.get("anima_artist_prefix")) or "Off"
         if anima_artist_prefix not in {"Off", "On", "Auto"}:
             anima_artist_prefix = "Off"

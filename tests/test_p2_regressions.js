@@ -121,6 +121,77 @@ async function punctuationTests() {
     }
 }
 
+async function periodTests() {
+    async function run(input, enabled, caret = input.length) {
+        const {context, state} = contextForAutocomplete([["underwear", 0, 1, ""]]);
+        if (enabled !== undefined) context.TAC_CFG.completeAfterPeriod = enabled;
+        const area = {value: input, selectionStart: caret, selectionEnd: caret};
+        const queries = [];
+        context.processParsers = async () => {queries.push(context.tagword); return [];};
+        await context.autocomplete(area, input);
+        state.flush();
+        return {area, context, state, queries};
+    }
+
+    for (const [input, enabled] of [["sky.", true], ["sky. ", false], ["sky.un", false]]) {
+        const {context, state} = contextForAutocomplete();
+        context.tagsLoaded = false;
+        context.TAC_CFG.completeAfterPeriod = enabled;
+        context.ensureTagsLoaded = () => assert.fail("suppressed input must not load the dictionary");
+        await context.autocomplete({value: input, selectionStart: input.length}, input);
+        assert.equal(state.visible, false);
+    }
+    const jp = await run("sky. 髪", true);
+    assert.deepEqual(jp.queries, ["髪"]);
+    const phrase = "sky.soft nat";
+    assert.deepEqual(core.phraseReplacementRange(phrase, phrase.length, "soft natural lighting", true), {start: 4, end: phrase.length});
+    assert.equal(core.phraseReplacementRange(phrase, phrase.length, "soft natural lighting", false), null);
+    for (const input of [".un", "sky.un", "sky. un", "前文.  un", "sky...un"]) {
+        for (const enabled of [undefined, true]) {
+            const {state, queries} = await run(input, enabled);
+            assert.deepEqual(queries, ["un"], input);
+            assert.deepEqual(Array.from(state.shown), ["underwear"]);
+        }
+        const off = await run(input, false);
+        assert.deepEqual(off.queries, [], input);
+        assert.equal(off.state.visible, false);
+    }
+    for (const enabled of [true, false]) {
+        for (const input of [".", "sky.", "sky.  "]) {
+            assert.deepEqual((await run(input, enabled)).queries, [], input);
+        }
+        for (const input of ["<lora:model.v1", "__folder.v1", "$style.v1", "0.75"]) {
+            assert.deepEqual((await run(input, enabled)).queries, [input]);
+        }
+        assert.deepEqual((await run("sky.un, un", enabled)).queries, ["un"]);
+    }
+
+    for (const [input, caret, expected, appendSeparators = false] of [
+        ["sky.un", 6, "sky.underwear"],
+        ["sky.  un, red", 8, "sky.  underwear, red"],
+        ["sky.unev, red", 6, "sky.underwear, red"],
+        ["sky.un.end", 6, "sky.underwear.end"],
+        ["un.un", 5, "un.underwear"],
+        ["sky.un", 6, "sky.underwear, ", true],
+        ["sky. un, red", 7, "sky. underwear, red", true],
+        ["sky.un.end", 6, "sky.underwear.end", true],
+    ]) {
+        const {area, context, queries} = await run(input, true, caret);
+        assert.deepEqual(queries, ["un"], input);
+        Object.assign(context, {
+            QUEUE_SANITIZE: [], QUEUE_AFTER_INSERT: [], processQueueReturn: async () => [],
+            updateInput() {}, isVisible: () => true,
+        });
+        context.TAC_CFG.appendSpace = appendSeparators;
+        context.TAC_CFG.appendComma = appendSeparators;
+        vm.runInNewContext(func(source, "insertTextAtCursor"), context);
+        await context.insertTextAtCursor(area, {type: context.ResultType.tag, text: "underwear"}, "un");
+        assert.equal(area.value, expected);
+        assert.equal(area.selectionStart, expected.endsWith(", ") ? expected.length : expected.indexOf("underwear") + "underwear".length);
+        assert.equal(area.selectionEnd, area.selectionStart);
+    }
+}
+
 async function mainGenerationTests() {
     for (const prompt of ["/", "\\"]) {
         const {context, state} = contextForAutocomplete();
@@ -234,6 +305,7 @@ async function wildcardTests() {
     }
     const failures = [];
     for (const [name, test] of [["punctuation and stale responses", punctuationTests],
+        ["completion after a period: search, disable and insertion", periodTests],
         ["main input generations and punctuation", mainGenerationTests],
         ["queued typing followed by Backspace/Delete", debounceDeletionTests],
         ["YML/YAML and text wildcards", wildcardTests]]) {

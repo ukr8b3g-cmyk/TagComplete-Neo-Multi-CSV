@@ -34,6 +34,19 @@ function fixture() {
         key(key, props = {}) {const e = event("keydown", {key, ...props}); area.dispatchEvent(e); return e;}};
 }
 (async () => {
+    {
+        const f = fixture();
+        f.show();
+        f.area.value = "une";
+        f.area.dispatchEvent(event("input", {inputType: "insertText"}));
+        f.area.value = "unev";
+        f.area.dispatchEvent(event("input", {inputType: "insertText"}));
+        assert.equal(f.visible(), false);
+        assert.equal(f.key("Tab").defaultPrevented, false);
+        assert.deepEqual(f.inserts, []);
+        await wait(40);
+        assert.deepEqual(f.calls.map(call => call.text), ["unev"]);
+    }
     for (const props of [{isComposing: true}, {keyCode: 229}]) {
         const f = fixture();
         for (const key of ["Enter", "Tab", "ArrowUp", "ArrowDown"]) {

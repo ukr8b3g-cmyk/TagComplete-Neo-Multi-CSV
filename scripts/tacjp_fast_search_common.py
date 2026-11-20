@@ -200,7 +200,7 @@ class SearchRequest:
     tag_files: Sequence[str]
     translation_files: Sequence[str] = ()
     prompt_mode: str = "Tag"
-    candidate_sort_mode: str = "Count"
+    candidate_sort_mode: str = "Prefix"
     context_natural: bool = False
     search_aliases: bool = True
     search_translations: bool = True
